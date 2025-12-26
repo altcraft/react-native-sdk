@@ -10,8 +10,6 @@
 
 Altcraft React Native SDK. It helps manage push subscriptions, tokens, SDK events, and sending mobile events to the Altcraft platform.
 
-> This README intentionally covers **Android only** (no iOS setup here).
-
 ---
 
 ## Features
@@ -36,7 +34,7 @@ Altcraft React Native SDK. It helps manage push subscriptions, tokens, SDK event
 - React Native: depends on your RN version and New Architecture setup (TurboModules).
 - Android:
   - `minSdk` and `compileSdk` depend on your app configuration
-  - Push provider integrated in the host app (FCM / HMS / RuStore)
+  - Push provider integrated in the host app (FCM / APNS/  HMS / RuStore)
 
 ---
 
