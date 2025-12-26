@@ -1,4 +1,4 @@
-# Altcraft React Native SDK (Android)
+# Altcraft React Native SDK
 
 ![Altcraft SDK Logo](https://guides.altcraft.com/img/logo.svg)
 
