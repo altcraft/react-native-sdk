@@ -11,6 +11,7 @@ import Foundation
 
 class JWTProvider: JWTInterface {
     func getToken() -> String? {
-        return nil
+        let jwt = UserDefaults(suiteName: NotificationService().appGroupID)?.string(forKey: "JWT_KEY")
+        return jwt
     }
 }

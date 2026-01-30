@@ -156,6 +156,23 @@ static void CallSetAppGroup(id instance, NSString * _Nullable groupName) {
   func(instance, sel, groupName);
 }
 
+///Stores a value in UserDefaults via Swift module.
+static void CallSetUserDefaultsValue(id instance,
+                                     NSString * _Nullable suiteName,
+                                     NSString *key,
+                                     id _Nullable value) {
+  if (!instance) return;
+
+  SEL sel = SdkSel(@"setUserDefaultsValueWithSuiteName:key:value:");
+  if (!SdkResponds(instance, sel)) return;
+
+  IMP imp = [instance methodForSelector:sel];
+  if (!imp) return;
+
+  void (*func)(id, SEL, id, id, id) = (void (*)(id, SEL, id, id, id))imp;
+  func(instance, sel, suiteName, key, value);
+}
+
 /// Deletes device token for a provider on Swift module.
 static void CallDeleteDeviceToken(id instance, NSString * _Nullable provider, void (^completion)(BOOL ok)) {
   if (!instance) { completion(NO); return; }
@@ -253,7 +270,7 @@ static void CallPushSubscription(id instance,
 
 #pragma mark - Mobile Event calls
 
-/// Sends mobile event to Swift module.
+///Sends mobile event to Swift module (includes `utm`).
 static void CallMobileEvent(id instance,
                             NSString *sid,
                             NSString *eventName,
@@ -261,19 +278,20 @@ static void CallMobileEvent(id instance,
                             NSDictionary * _Nullable payload,
                             NSDictionary * _Nullable matching,
                             NSString * _Nullable matchingType,
-                            NSDictionary * _Nullable profileFields) {
+                            NSDictionary * _Nullable profileFields,
+                            NSDictionary * _Nullable utm) {
   if (!instance) return;
 
-  SEL sel = SdkSel(@"mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:");
+  SEL sel = SdkSel(@"mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:utm:");
   if (!SdkResponds(instance, sel)) return;
 
   IMP imp = [instance methodForSelector:sel];
   if (!imp) return;
 
-  void (*func)(id, SEL, id, id, id, id, id, id, id) =
-      (void (*)(id, SEL, id, id, id, id, id, id, id))imp;
+  void (*func)(id, SEL, id, id, id, id, id, id, id, id) =
+      (void (*)(id, SEL, id, id, id, id, id, id, id, id))imp;
 
-  func(instance, sel, sid, eventName, sendMessageId, payload, matching, matchingType, profileFields);
+  func(instance, sel, sid, eventName, sendMessageId, payload, matching, matchingType, profileFields, utm);
 }
 
 #pragma mark - Promise helpers
@@ -459,111 +477,6 @@ static void CallClear(id instance,
   CallPromise0Args(instance, @"clearWithResolver:rejecter:", resolve, reject);
 }
 
-#pragma mark - Events: Swift -> NotificationCenter -> ObjC++ -> JS
-
-/// Notification name used by Swift layer to publish events.
-static NSString * const SdkEventsNotificationName = @"AltcraftSdkEventNotification";
-
-static id _Nullable gSdkEventsObserver = nil;
-static id<RCTCallableJSModules> _Nullable gCallableJSModules = nil;
-
-/// Returns callableJSModules from a module instance if present.
-static id<RCTCallableJSModules> _Nullable SdkGetCallableFromModule(id moduleInstance) {
-  if (!moduleInstance) return nil;
-
-  SEL sel = SdkSel(@"callableJSModules");
-  if (![moduleInstance respondsToSelector:sel]) return nil;
-
-  id (*msgSend)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
-  id v = msgSend(moduleInstance, sel);
-  return (id<RCTCallableJSModules>)v;
-}
-
-/// Returns bridge from a module instance if present (Old Arch).
-static id _Nullable SdkGetBridgeAny(id moduleInstance) {
-  if (!moduleInstance) return nil;
-
-  SEL sel = SdkSel(@"bridge");
-  if (![moduleInstance respondsToSelector:sel]) return nil;
-
-  id (*msgSend)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
-  return msgSend(moduleInstance, sel);
-}
-
-/// Checks if bridge supports enqueueing JS calls.
-static BOOL SdkBridgeCanEnqueue(id bridgeObj) {
-  if (!bridgeObj) return NO;
-
-  SEL sel = SdkSel(@"enqueueJSCall:method:args:completion:");
-  return [bridgeObj respondsToSelector:sel];
-}
-
-/// Emits event using bridge enqueue (Old Arch).
-static void SdkBridgeEnqueueEmit(id bridgeObj, NSDictionary *payload) {
-  SEL sel = SdkSel(@"enqueueJSCall:method:args:completion:");
-  if (![bridgeObj respondsToSelector:sel]) return;
-
-  NSArray *args = @[@"AltcraftSdkEvent", payload ?: @{}];
-
-  void (*func)(id, SEL, id, id, id, id) = (void (*)(id, SEL, id, id, id, id))objc_msgSend;
-  func(bridgeObj, sel, @"RCTDeviceEventEmitter", @"emit", args, (id)nil);
-}
-
-/// Emits event to JS via callableJSModules (preferred) or bridge enqueue.
-static void SdkEmitEventToJS(id moduleInstance, NSDictionary *payload) {
-  NSDictionary *safePayload = (payload && [payload isKindOfClass:[NSDictionary class]]) ? payload : @{};
-
-  // 1) New Arch: callableJSModules.
-  id<RCTCallableJSModules> callable = gCallableJSModules;
-  if (!callable) {
-    callable = SdkGetCallableFromModule(moduleInstance);
-    if (callable) gCallableJSModules = callable;
-  }
-  if (callable) {
-    [callable invokeModule:@"RCTDeviceEventEmitter"
-                    method:@"emit"
-                  withArgs:@[@"AltcraftSdkEvent", safePayload]];
-    return;
-  }
-
-  // 2) Old Arch: bridge enqueueJSCall.
-  id bridgeObj = SdkGetBridgeAny(moduleInstance);
-  if (SdkBridgeCanEnqueue(bridgeObj)) {
-    SdkBridgeEnqueueEmit(bridgeObj, safePayload);
-  }
-}
-
-/// Installs NotificationCenter observer to forward events to JS.
-static void SdkInstallEventsObserverIfNeeded(id moduleInstance) {
-  // Refresh callable cache if possible.
-  id<RCTCallableJSModules> callable = SdkGetCallableFromModule(moduleInstance);
-  if (callable) gCallableJSModules = callable;
-
-  if (gSdkEventsObserver != nil) return;
-
-  gSdkEventsObserver =
-    [[NSNotificationCenter defaultCenter] addObserverForName:SdkEventsNotificationName
-                                                      object:nil
-                                                       queue:[NSOperationQueue mainQueue]
-                                                  usingBlock:^(NSNotification *note) {
-    NSDictionary *payload = note.userInfo;
-
-    // Debug visibility for event flow (safe to keep).
-    NSLog(@"[AltcraftSdk] event %@", payload);
-
-    SdkEmitEventToJS(moduleInstance, payload);
-  }];
-}
-
-/// Removes NotificationCenter observer.
-static void SdkRemoveEventsObserverIfNeeded(void) {
-  if (!gSdkEventsObserver) return;
-
-  [[NSNotificationCenter defaultCenter] removeObserver:gSdkEventsObserver];
-  gSdkEventsObserver = nil;
-  gCallableJSModules = nil;
-}
-
 #pragma mark - Typed config -> NSDictionary (New Arch)
 
 #ifdef RCT_NEW_ARCH_ENABLED
@@ -709,15 +622,11 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 /// Required by RN event emitter API (no-op).
 - (void)removeListeners:(double)count { (void)count; }
 
-#pragma mark - Events API
+#pragma mark - Events API (Swift activates emitting; ObjC++ does NOT forward events)
 
-/// Subscribes to SDK events and forwards them to JS.
+/// Subscribes to SDK events in Swift layer (idempotent).
 - (void)subscribeToEvents
 {
-  // Install observer and keep emitting to JS.
-  SdkInstallEventsObserverIfNeeded(self);
-
-  // Ask Swift to subscribe and start posting notifications.
   id module = SdkAppModuleSharedInstance();
   EnsureProvidersInstalled(module);
 
@@ -731,22 +640,20 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   func(module, sel);
 }
 
-/// Unsubscribes from SDK events and stops forwarding to JS.
+/// Unsubscribes from SDK events in Swift layer (idempotent).
 - (void)unsubscribeFromEvent
 {
   id module = SdkAppModuleSharedInstance();
   EnsureProvidersInstalled(module);
 
   SEL sel = SdkSel(@"unsubscribeFromEvent");
-  if (SdkResponds(module, sel)) {
-    IMP imp = [module methodForSelector:sel];
-    if (imp) {
-      void (*func)(id, SEL) = (void (*)(id, SEL))imp;
-      func(module, sel);
-    }
-  }
+  if (!SdkResponds(module, sel)) return;
 
-  SdkRemoveEventsObserverIfNeeded();
+  IMP imp = [module methodForSelector:sel];
+  if (!imp) return;
+
+  void (*func)(id, SEL) = (void (*)(id, SEL))imp;
+  func(module, sel);
 }
 
 #pragma mark - Common (JWT / AppGroup)
@@ -872,14 +779,15 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 
 #pragma mark - MobileEvent (void)
 
-/// Sends a custom mobile event to backend.
+/// Sends a custom mobile event to backend (now includes `utm`).
 - (void)mobileEvent:(NSString *)sid
           eventName:(NSString *)eventName
        sendMessageId:(NSString * _Nullable)sendMessageId
-            payload:(NSDictionary *)payload
-           matching:(NSDictionary *)matching
+            payload:(NSDictionary * _Nullable)payload
+           matching:(NSDictionary * _Nullable)matching
        matchingType:(NSString * _Nullable)matchingType
-      profileFields:(NSDictionary *)profileFields
+      profileFields:(NSDictionary * _Nullable)profileFields
+                utm:(NSDictionary * _Nullable)utm
 {
   id module = SdkAppModuleSharedInstance();
   EnsureProvidersInstalled(module);
@@ -891,7 +799,8 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
                   (NSDictionary *)SdkNilIfNSNull(payload),
                   (NSDictionary *)SdkNilIfNSNull(matching),
                   (NSString *)SdkNilIfNSNull(matchingType),
-                  (NSDictionary *)SdkNilIfNSNull(profileFields));
+                  (NSDictionary *)SdkNilIfNSNull(profileFields),
+                  (NSDictionary *)SdkNilIfNSNull(utm));
 }
 
 #pragma mark - Promises
@@ -1070,6 +979,39 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   resolve((id)kCFNull);
 }
 
+#pragma mark - UserDefaults
+
+/// We forward to Swift `SdkModule.setUserDefaultsValueWithSuiteName:key:value:`
+/// so App Group logic is centralized in Swift and works consistently.
+- (void)setUserDefaultsValue:(NSString * _Nullable)suiteName
+                         key:(NSString *)key
+                       value:(NSString * _Nullable)value
+{
+  id module = SdkAppModuleSharedInstance();
+  EnsureProvidersInstalled(module);
+
+  NSString *sn = (NSString *)SdkNilIfNSNull(suiteName);
+  NSString *k  = (NSString *)SdkNilIfNSNull(key);
+  id v         = SdkNilIfNSNull(value); // value already NSString* or nil
+
+  if (!module) {
+    return;
+  }
+
+  if (!k || k.length == 0) {
+    return;
+  }
+
+  if (![NSThread isMainThread]) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      CallSetUserDefaultsValue(module, sn, k, v);
+    });
+    return;
+  }
+
+  CallSetUserDefaultsValue(module, sn, k, v);
+}
+
 #pragma mark - iOS-only stubs (not implemented)
 
 /// iOS stub: delivery tracking is handled by server/other platforms.
@@ -1091,7 +1033,7 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 }
 
 /// iOS stub: retry control is managed in Swift layer / system scheduling.
-- (void)reinitializeRetryControlInThisSession
+- (void)unlockInitOperationsInThisSession
 {
   // Intentionally not implemented on iOS.
 }

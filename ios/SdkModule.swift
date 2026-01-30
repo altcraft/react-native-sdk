@@ -1,66 +1,55 @@
+// SdkModule.swift
 import Foundation
 import Altcraft
 import React
 
-/// React Native bridge module for the Altcraft iOS SDK.
+/// React Native bridge module for Altcraft iOS SDK.
 ///
-/// This module acts as the single integration point between JS and the native SDK. It provides:
-/// - Stable provider references (JWT / FCM / HMS / APNs) that must outlive individual RN calls.
-/// - A single SDK initialization entry point (`initialize(...)`) matching the Android bridge behavior.
-/// - A single subscriber model for SDK events, forwarded to JS via NotificationCenter.
-/// - Thin wrappers around token APIs, subscription APIs, and mobile event APIs.
+/// Responsibilities:
+/// - Provide stable token provider references (JWT / FCM / HMS / APNs) that outlive individual RN calls.
+/// - Expose a single SDK initialization entry point matching Android bridge behavior.
+/// - Forward SDK events to JS via a single `RCTEventEmitter`.
 ///
 /// Thread-safety:
-/// - Internal mutable state is protected by `NSLock`.
-/// - Provider closures read token values under the same lock.
-///
-/// Notes:
-/// - Exceptions are not propagated to JS. Errors are mapped to promise rejections only where required.
-/// - Providers are installed once per process lifetime to keep stable references inside the SDK.
+/// - All mutable state is protected by `NSLock`.
+/// - Provider callbacks read token values under the same lock.
 @objc(SdkModule)
 @objcMembers
 @available(iOSApplicationExtension, unavailable)
 public final class SdkModule: NSObject {
 
+  // MARK: - Singleton & State
+
   /// Shared singleton instance used by the ObjC++ bridge.
   public static let shared = SdkModule()
 
-  /// A single lock protecting all mutable state in this module.
+  /// Protects all mutable state in this module.
   private let lock = NSLock()
 
-  // MARK: - JWT (stable provider reference)
+  /// Last configuration used to initialize the SDK.
+  private var configuration: AltcraftConfiguration?
 
-  /// Current JWT value used by `jwtProvider`.
-  ///
-  /// Access must be protected by `lock`.
+  // MARK: - JWT Provider
+
+  /// Current JWT value used by `jwtProvider`. Access under `lock`.
   private var jwt: String?
 
-  /// Stable JWT provider reference.
-  ///
-  /// The SDK keeps a strong reference to the provider, therefore this object must live
-  /// for the entire process lifetime. The provider reads `jwt` under `lock`.
+  /// Indicates whether the JWT provider has been installed in the SDK.
+  private var jwtProviderInstalled = false
+
+  /// Stable JWT provider reference stored by the SDK for the process lifetime.
   private lazy var jwtProvider: RNJWTProvider = RNJWTProvider { [weak self] in
     guard let self else { return nil }
     self.lock.lock(); defer { self.lock.unlock() }
     return self.jwt
   }
 
-  /// Indicates whether the JWT provider has been registered in the SDK.
-  ///
-  /// Access must be protected by `lock`.
-  private var jwtProviderInstalled = false
-
-  /// Registers `jwtProvider` in the SDK exactly once.
-  ///
-  /// Uses a double-checked locking pattern:
-  /// - fast path avoids locking when already installed
-  /// - slow path installs provider and flips the flag under lock
+  /// Installs JWT provider into the SDK once.
   private func installJWTProviderIfNeeded() {
-    // double-checked locking pattern (cheap fast-path)
     lock.lock()
-    let already = jwtProviderInstalled
+    let alreadyInstalled = jwtProviderInstalled
     lock.unlock()
-    if already { return }
+    if alreadyInstalled { return }
 
     AltcraftSDK.shared.setJWTProvider(provider: jwtProvider)
 
@@ -69,13 +58,9 @@ public final class SdkModule: NSObject {
     lock.unlock()
   }
 
-  /// Sets JWT token for requests performed by the Altcraft SDK.
+  /// Sets JWT token used by SDK requests.
   ///
   /// ObjC selector used by `Sdk.mm`: `setJWT:`
-  ///
-  /// Behavior:
-  /// - Ensures the stable provider is installed once.
-  /// - Updates the stored JWT value (provider will start returning the new token).
   @objc(setJWT:)
   public func setJWT(_ token: String?) {
     installJWTProviderIfNeeded()
@@ -84,33 +69,29 @@ public final class SdkModule: NSObject {
     lock.unlock()
   }
 
-  // MARK: - AppGroup
+  // MARK: - App Group
 
-  /// Sets the App Group identifier for shared storage (Core Data + UserDefaults/App Group).
+  /// Sets the App Group identifier for shared storage.
   ///
   /// ObjC selector used by `Sdk.mm`: `setAppGroupWithName:`
-  ///
-  /// Call this before operations that rely on a shared container.
   @objc(setAppGroupWithName:)
   public func setAppGroup(name: String?) {
     AltcraftSDK.shared.setAppGroup(groupName: name)
   }
 
-  // MARK: - Tokens / Config
+  // MARK: - Push Tokens
 
-  /// Stored push tokens used by token providers. Access guarded by `lock`.
+  /// Stored push tokens used by token providers. Access under `lock`.
   private var fcm: String?
   private var hms: String?
   private var apns: String?
 
-  /// Last built configuration used to initialize the SDK.
-  /// Stored for debugging/inspection purposes.
-  private var configuration: AltcraftConfiguration?
+  // MARK: - Token Providers
 
-  /// Stable FCM provider reference created once and reused.
-  ///
-  /// - `get` returns the current token under lock.
-  /// - `del` clears the token under lock.
+  /// Indicates whether token providers have been installed in the SDK.
+  private var tokenProvidersInstalled = false
+
+  /// FCM provider backed by stored `fcm` token.
   private lazy var fcmProvider: RNFCMProvider = RNFCMProvider(
     get: { [weak self] completion in
       guard let self else { completion(nil); return }
@@ -119,15 +100,14 @@ public final class SdkModule: NSObject {
     },
     del: { [weak self] completion in
       guard let self else { completion(false); return }
-      self.lock.lock(); self.fcm = nil; self.lock.unlock()
+      self.lock.lock()
+      self.fcm = nil
+      self.lock.unlock()
       completion(true)
     }
   )
 
-  /// Stable HMS provider reference created once and reused.
-  ///
-  /// - `get` returns the current token under lock.
-  /// - `del` clears the token under lock.
+  /// HMS provider backed by stored `hms` token.
   private lazy var hmsProvider: RNHMSProvider = RNHMSProvider(
     get: { [weak self] completion in
       guard let self else { completion(nil); return }
@@ -136,48 +116,31 @@ public final class SdkModule: NSObject {
     },
     del: { [weak self] completion in
       guard let self else { completion(false); return }
-      self.lock.lock(); self.hms = nil; self.lock.unlock()
+      self.lock.lock()
+      self.hms = nil
+      self.lock.unlock()
       completion(true)
     }
   )
 
-  /// Stable APNs provider reference created once and reused.
-  ///
-  /// APNs token is read under lock and returned through completion.
+  /// APNs provider backed by stored `apns` token.
   private lazy var apnsProvider: RNAPNSProvider = RNAPNSProvider { [weak self] completion in
     guard let self else { completion(nil); return }
     self.lock.lock(); defer { self.lock.unlock() }
     completion(self.apns)
   }
 
-  /// Indicates whether token providers have been registered in the SDK.
-  private var tokenProvidersInstalled = false
-
-  // ---- Events (single subscriber like Android) ----
-
-  /// Indicates whether the module is currently subscribed to SDK events.
-  ///
-  /// This is a guard to keep the subscription single (idempotent subscribe/unsubscribe).
-  private var eventsSubscribed: Bool = false
-
-  // MARK: - Install providers once (App module only)
-
-  /// Ensures all token providers are installed in the SDK.
-  ///
-  /// This is called from initialization and from token setters to guarantee the SDK
-  /// always has stable references.
+  /// Ensures token providers are installed in the SDK once.
   public func ensureProvidersInstalled() {
     installTokenProvidersIfNeeded()
   }
 
-  /// Registers token providers (FCM/HMS/APNs) in the SDK exactly once.
-  ///
-  /// Uses a double-checked locking pattern to avoid repeated work.
+  /// Installs token providers using a double-checked locking pattern.
   private func installTokenProvidersIfNeeded() {
     lock.lock()
-    let already = tokenProvidersInstalled
+    let alreadyInstalled = tokenProvidersInstalled
     lock.unlock()
-    if already { return }
+    if alreadyInstalled { return }
 
     let push = AltcraftSDK.shared.pushTokenFunction
     push.setFCMTokenProvider(fcmProvider)
@@ -189,18 +152,18 @@ public final class SdkModule: NSObject {
     lock.unlock()
   }
 
-  // MARK: - ✅ RN init (ONLY initialize)
+  // MARK: - SDK Initialization (RN Promise)
 
   /// Initializes Altcraft SDK using configuration received from React Native.
   ///
-  /// Contract:
+  /// Promise contract:
   /// - Resolves with `nil` on success.
   /// - Rejects with:
-  ///   - `ALTCRAFT_INIT_INVALID_CONFIG` when required fields are missing or configuration build fails.
+  ///   - `ALTCRAFT_INIT_INVALID_CONFIG` when required fields are missing or config cannot be built.
   ///   - `ALTCRAFT_INIT_ERROR` when SDK initialization reports failure.
   ///
   /// Notes:
-  /// - Providers are installed before initialization to ensure stable references.
+  /// - Token providers are installed before initialization.
   @objc(initializeWithConfig:resolver:rejecter:)
   public func initialize(
     _ config: NSDictionary,
@@ -209,7 +172,8 @@ public final class SdkModule: NSObject {
   ) {
     ensureProvidersInstalled()
 
-    let dict = config as? [String: Any] ?? [:]
+    // Normalizes numbers/bools, parses JSON strings, and recursively converts nested structures.
+    let dict: [String: Any?] = Converter.toAnyDict(config) ?? [:]
 
     guard let apiUrl = dict["apiUrl"] as? String, !apiUrl.isEmpty else {
       reject("ALTCRAFT_INIT_INVALID_CONFIG", "apiUrl is required", nil)
@@ -221,7 +185,14 @@ public final class SdkModule: NSObject {
     let providerPriorityList = dict["providerPriorityList"] as? [String]
 
     var appInfo: AppInfo? = nil
-    if let app = dict["appInfo"] as? [String: Any] {
+    if let app = dict["appInfo"] as? [String: Any?] {
+      let appID = (app["appID"] as? String) ?? ""
+      let appIID = (app["appIID"] as? String) ?? ""
+      let appVer = (app["appVer"] as? String) ?? ""
+      if !appID.isEmpty || !appIID.isEmpty || !appVer.isEmpty {
+        appInfo = AppInfo(appID: appID, appIID: appIID, appVer: appVer)
+      }
+    } else if let app = dict["appInfo"] as? [String: Any] {
       let appID = (app["appID"] as? String) ?? ""
       let appIID = (app["appIID"] as? String) ?? ""
       let appVer = (app["appVer"] as? String) ?? ""
@@ -252,28 +223,95 @@ public final class SdkModule: NSObject {
     }
   }
 
-  // MARK: - ✅ NativeEventEmitter support (no-op)
+  // MARK: - NativeEventEmitter compatibility
 
-  /// Required by `NativeEventEmitter` contract on the JS side.
-  ///
-  /// iOS bridge uses NotificationCenter forwarding instead, so this is a no-op.
+  /// Required by `NativeEventEmitter` (no-op on iOS).
   public func addListener(_ eventName: String) { _ = eventName }
 
-  /// Required by `NativeEventEmitter` contract on the JS side.
-  ///
-  /// iOS bridge uses NotificationCenter forwarding instead, so this is a no-op.
+  /// Required by `NativeEventEmitter` (no-op on iOS).
   public func removeListeners(_ count: NSNumber) { _ = count }
 
-  // MARK: - ✅ Events API (called from Sdk.mm)
+  // MARK: - RCTEventEmitter
 
-  /// Subscribes to native SDK events and forwards them to JS.
+  /// Event emitter used by RN to receive Altcraft SDK events.
   ///
-  /// Single-subscription behavior:
-  /// - Multiple calls are safe (idempotent).
-  /// - Events are emitted via NotificationCenter using `.altcraftSdkEventNotification`.
-  ///
-  /// Notes:
-  /// - The actual event source is `SDKEvents.shared`, consistent with the native SDK event bus.
+  /// Emits: `"AltcraftSdkEvent"`.
+  @objc(SDKEventEmitter)
+  final class SDKEventEmitter: RCTEventEmitter {
+
+    /// Active emitter instance created by React Native.
+    private static weak var _shared: SDKEventEmitter?
+
+    /// Events buffered before React Native subscribes.
+    private static var pending: [(String, Any?)] = []
+    private static let pendingLock = NSLock()
+
+    override init() {
+      super.init()
+      SDKEventEmitter._shared = self
+      SDKEventEmitter.flushPendingIfPossible()
+    }
+
+    override func supportedEvents() -> [String]! {
+      ["AltcraftSdkEvent"]
+    }
+
+    @objc override static func requiresMainQueueSetup() -> Bool {
+      true
+    }
+
+    /// Emits a single integer code as an Altcraft event payload.
+    @objc static func emitAltcraft(code: Int) {
+      emit(name: "AltcraftSdkEvent", body: ["code": code])
+    }
+
+    /// Sends an event to JS. If emitter is not ready, buffers it.
+    @objc static func emit(name: String, body: Any?) {
+      let deliver = {
+        if let emitter = _shared {
+          emitter.sendEvent(withName: name, body: body)
+        } else {
+          buffer(name: name, body: body)
+        }
+      }
+
+      if Thread.isMainThread {
+        deliver()
+      } else {
+        DispatchQueue.main.async { deliver() }
+      }
+    }
+
+    private static func buffer(name: String, body: Any?) {
+      pendingLock.lock()
+      pending.append((name, body))
+      pendingLock.unlock()
+    }
+
+    private static func flushPendingIfPossible() {
+      guard Thread.isMainThread else {
+        DispatchQueue.main.async { flushPendingIfPossible() }
+        return
+      }
+      guard let emitter = _shared else { return }
+
+      pendingLock.lock()
+      let toSend = pending
+      pending.removeAll()
+      pendingLock.unlock()
+
+      for (name, body) in toSend {
+        emitter.sendEvent(withName: name, body: body)
+      }
+    }
+  }
+
+  // MARK: - SDK Events subscription
+
+  /// Indicates whether this module is currently subscribed to SDK events.
+  private var eventsSubscribed: Bool = false
+
+  /// Subscribes to SDK events and forwards them to JS.
   public func subscribeToEvents() {
     lock.lock()
     let already = eventsSubscribed
@@ -281,123 +319,47 @@ public final class SdkModule: NSObject {
     lock.unlock()
     if already { return }
 
-    // Subscribe to native SDK events emitted through SDKEvents.shared.emit(event:)
-    SDKEvents.shared.subscribe { [weak self] ev in
+    SDKEvents.shared.subscribe { [weak self] event in
       guard let self else { return }
-
-      print("[AltcraftSdk] \(ev.eventCode ?? 0)")
-
-      // If unsubscribed meanwhile — ignore
-      self.lock.lock()
-      let subscribed = self.eventsSubscribed
-      self.lock.unlock()
-      if !subscribed { return }
-
-      let payload = self.mapSdkEventToJs(ev)
-      NotificationCenter.default.post(
-        name: .altcraftSdkEventNotification,
-        object: nil,
-        userInfo: payload
-      )
+      SDKEventEmitter.emit(name: "AltcraftSdkEvent", body: self.toPayload(event))
     }
   }
 
-  /// Unsubscribes from the SDK event stream.
-  ///
-  /// After this call, events are no longer forwarded to JS.
+  /// Unsubscribes from SDK events.
   public func unsubscribeFromEvent() {
     lock.lock()
     eventsSubscribed = false
     lock.unlock()
-
     SDKEvents.shared.unsubscribe()
   }
 
-  /// Maps a native SDK event into a JS-friendly payload.
-  ///
-  /// Output schema (matches Android bridge):
-  /// - function: String
-  /// - code: Int | null
-  /// - message: String
-  /// - type: "event" | "error" | "retryError"
-  /// - value: Object | null
-  private func mapSdkEventToJs(_ ev: Event) -> [String: Any] {
-    let message = ev.message ?? String(describing: ev)
-    let code: Any = ev.eventCode.map { $0 } ?? NSNull()
+  // MARK: - Event payload mapping
 
+  /// Converts an SDK `Event` into a JS-friendly payload.
+  private func toPayload(_ event: Event) -> [String: Any] {
     let type: String
-    if ev is RetryEvent {
+    if event is RetryEvent {
       type = "retryError"
-    } else if ev is ErrorEvent {
+    } else if event is ErrorEvent {
       type = "error"
     } else {
       type = "event"
     }
 
-    let valueObj: Any
-    if let v = ev.value, !v.isEmpty {
-      valueObj = sanitizeToJsObject(v)
-    } else {
-      valueObj = NSNull()
-    }
-
     return [
-      "function": ev.function,
-      "code": code,
-      "message": message,
+      "function": event.function,
+      "code": event.eventCode as Any? ?? NSNull(),
+      "message": event.message ?? "",
       "type": type,
-      "value": valueObj
+      "value": Converter.toAny(event.value) ?? NSNull()
     ]
   }
 
-  /// Converts a Swift dictionary into an `NSDictionary` suitable for React Native.
-  ///
-  /// All values are sanitized to supported JS types.
-  private func sanitizeToJsObject(_ dict: [String: Any]) -> NSDictionary {
-    let out = NSMutableDictionary(capacity: dict.count)
-    for (k, v) in dict {
-      out[k] = sanitizeAnyToJs(v)
-    }
-    return out
-  }
-
-  /// Sanitizes an arbitrary Swift value into a JS-compatible representation.
-  ///
-  /// Supported output types:
-  /// - `NSString` / `NSNumber` / `NSNull`
-  /// - `NSArray` / `NSDictionary` (recursively sanitized)
-  ///
-  /// Unsupported values are stringified via `String(describing:)`.
-  private func sanitizeAnyToJs(_ v: Any) -> Any {
-    if v is NSNull { return NSNull() }
-
-    if let s = v as? String { return s }
-    if let n = v as? NSNumber { return n }
-    if let b = v as? Bool { return NSNumber(value: b) }
-    if let i = v as? Int { return NSNumber(value: i) }
-    if let d = v as? Double { return NSNumber(value: d) }
-    if let f = v as? Float { return NSNumber(value: Double(f)) }
-
-    if let arr = v as? [Any] {
-      return arr.map { sanitizeAnyToJs($0) }
-    }
-
-    if let m = v as? [String: Any] {
-      return sanitizeToJsObject(m)
-    }
-
-    return String(describing: v)
-  }
-
-  // MARK: - Token setters (App module)
+  // MARK: - Token setters
 
   /// Sets (or clears) the stored FCM token and updates SDK provider registration.
   ///
   /// ObjC selector used by `Sdk.mm`: `setFCM:`
-  ///
-  /// Behavior:
-  /// - If `token` is nil/empty: provider is unregistered (SDK won't request FCM token).
-  /// - Otherwise: provider remains registered and will supply the token.
   @objc(setFCM:)
   public func setFCM(_ token: String?) {
     ensureProvidersInstalled()
@@ -414,10 +376,6 @@ public final class SdkModule: NSObject {
   /// Sets (or clears) the stored HMS token and updates SDK provider registration.
   ///
   /// ObjC selector used by `Sdk.mm`: `setHMS:`
-  ///
-  /// Behavior:
-  /// - If `token` is nil/empty: provider is unregistered.
-  /// - Otherwise: provider remains registered and will supply the token.
   @objc(setHMS:)
   public func setHMS(_ token: String?) {
     ensureProvidersInstalled()
@@ -434,10 +392,6 @@ public final class SdkModule: NSObject {
   /// Sets (or clears) the stored APNs token and updates SDK provider registration.
   ///
   /// ObjC selector used by `Sdk.mm`: `setAPNS:`
-  ///
-  /// Behavior:
-  /// - If `token` is nil/empty: provider is unregistered.
-  /// - Otherwise: provider remains registered and will supply the token.
   @objc(setAPNS:)
   public func setAPNS(_ token: String?) {
     ensureProvidersInstalled()
@@ -451,26 +405,22 @@ public final class SdkModule: NSObject {
     }
   }
 
-  // MARK: - clear
+  // MARK: - SDK Clear (RN Promise)
 
   /// Clears SDK state (tokens/subscriptions/cache depending on SDK implementation).
-  ///
-  /// Promise contract:
-  /// - Resolves with `nil` after cleanup completes.
   @objc(clearWithResolver:rejecter:)
   public func clear(
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    _ = reject
     ensureProvidersInstalled()
-    AltcraftSDK.shared.clear {
-      resolve(nil)
-    }
+    AltcraftSDK.shared.clear { resolve(nil) }
   }
 
-  // MARK: - Token API wrappers used by ObjC bridge
+  // MARK: - Token API wrappers
 
-  /// Returns the currently resolved push token from the SDK.
+  /// Returns the current push token from the SDK.
   ///
   /// - Parameter completion: Called with `{ provider, token }` or `nil` if not available.
   @objc(getPushTokenWithCompletion:)
@@ -485,32 +435,32 @@ public final class SdkModule: NSObject {
     }
   }
 
-  /// Deletes device token for a known provider.
+  /// Deletes device token for a supported provider.
   ///
   /// - Parameters:
-  ///   - provider: Provider name from JS (case-insensitive, expected to match constants).
+  ///   - provider: Provider name from JS (case-insensitive).
   ///   - completion: `true` if a supported provider was handled, otherwise `false`.
   @objc(deleteDeviceTokenWithProvider:completion:)
   public func deleteDeviceToken(provider: String?, completion: @escaping (Bool) -> Void) {
     ensureProvidersInstalled()
-    let p = (provider ?? "").lowercased()
-    _ = p // keep for potential normalization usage
 
-    if provider == Constants.ProviderName.firebase {
+    let p = (provider ?? "").lowercased()
+
+    if p == Constants.ProviderName.firebase.lowercased() {
       AltcraftSDK.shared.pushTokenFunction.deleteDeviceToken(provider: Constants.ProviderName.firebase) {
         completion(true)
       }
       return
     }
 
-    if provider == Constants.ProviderName.huawei {
+    if p == Constants.ProviderName.huawei.lowercased() {
       AltcraftSDK.shared.pushTokenFunction.deleteDeviceToken(provider: Constants.ProviderName.huawei) {
         completion(true)
       }
       return
     }
 
-    if provider == Constants.ProviderName.apns {
+    if p == Constants.ProviderName.apns.lowercased() {
       AltcraftSDK.shared.pushTokenFunction.deleteDeviceToken(provider: Constants.ProviderName.apns) {
         completion(true)
       }
@@ -521,21 +471,13 @@ public final class SdkModule: NSObject {
   }
 
   /// Forces push token update flow in the SDK.
-  ///
-  /// - Parameter completion: Called when the update flow finishes.
   @objc(forcedTokenUpdateWithCompletion:)
   public func forcedTokenUpdate(_ completion: @escaping () -> Void) {
     ensureProvidersInstalled()
-    AltcraftSDK.shared.pushTokenFunction.forcedTokenUpdate {
-      completion()
-    }
+    AltcraftSDK.shared.pushTokenFunction.forcedTokenUpdate { completion() }
   }
 
   /// Updates push provider priority list.
-  ///
-  /// - Parameters:
-  ///   - list: Provider ids ordered by preference.
-  ///   - completion: Returns `true` when the list is applied.
   @objc(changePushProviderPriorityListWithList:completion:)
   public func changePushProviderPriorityList(_ list: [String]?, completion: @escaping (Bool) -> Void) {
     ensureProvidersInstalled()
@@ -543,61 +485,44 @@ public final class SdkModule: NSObject {
     completion(true)
   }
 
-  /// Sets or clears push token for a specific provider.
-  ///
-  /// This is a direct passthrough to the SDK API. The SDK decides how to interpret `pushToken`.
+  /// Sets push token for a specific provider.
   @objc(setPushTokenWithProvider:pushToken:)
   public func setPushToken(provider: String, pushToken: Any?) {
     ensureProvidersInstalled()
     AltcraftSDK.shared.pushTokenFunction.setPushToken(provider: provider, pushToken: pushToken)
   }
 
-  // MARK: - ✅ Push Subscription (RN bridge)
+  // MARK: - Push Subscription
 
-  /// Converts an `NSDictionary` into a Swift `[String: Any?]` map.
-  ///
-  /// Returns `nil` for:
-  /// - nil input
-  /// - empty dictionaries
+  /// Converts `NSDictionary` into `[String: Any?]` with normalization.
   private func toAnyDict(_ dict: NSDictionary?) -> [String: Any?]? {
-    guard let dict = dict as? [String: Any] else { return nil }
-    if dict.isEmpty { return nil }
-    var out: [String: Any?] = [:]
-    out.reserveCapacity(dict.count)
-    for (k, v) in dict {
-      out[k] = v
-    }
-    return out.isEmpty ? nil : out
+    Converter.toAnyDict(dict)
   }
 
-  /// Converts RN categories array into native `[CategoryData]`.
-  ///
-  /// Returns `nil` for:
-  /// - nil input
-  /// - empty input
-  /// - when all items are invalid/unparseable
+  /// Converts categories into native `[CategoryData]`.
   private func toCats(_ cats: NSArray?) -> [CategoryData]? {
-    guard let arr = cats as? [Any], !arr.isEmpty else { return nil }
+    guard let arr = cats, arr.count > 0 else { return nil }
 
     var out: [CategoryData] = []
     out.reserveCapacity(arr.count)
 
     for item in arr {
-      guard let m = item as? [String: Any] else { continue }
+      if let s = item as? String, !s.isEmpty {
+        out.append(CategoryData(name: s, title: nil, steady: nil, active: true))
+        continue
+      }
 
-      let name = m["name"] as? String
-      let title = m["title"] as? String
-      let steady = m["steady"] as? Bool
-      let active = m["active"] as? Bool
+      if let m = item as? NSDictionary {
+        let mm = Converter.toAnyDict(m) ?? [:]
+        let name = mm["name"] as? String
+        let title = mm["title"] as? String
+        let steady = mm["steady"] as? Bool
+        let active = mm["active"] as? Bool
 
-      out.append(
-        CategoryData(
-          name: name,
-          title: title,
-          steady: steady,
-          active: active
-        )
-      )
+        if name != nil {
+          out.append(CategoryData(name: name, title: title, steady: steady, active: active))
+        }
+      }
     }
 
     return out.isEmpty ? nil : out
@@ -605,11 +530,8 @@ public final class SdkModule: NSObject {
 
   /// Subscribes device/profile for push notifications.
   ///
-  /// ObjC selector used by `Sdk.mm`: `pushSubscribe:profileFields:customFields:cats:replace:skipTriggers:`
-  ///
-  /// Parameters match the JS spec:
-  /// - sync: defaults to `true` when nil
-  /// - replace / skipTriggers: optional flags forwarded as `Bool?`
+  /// ObjC selector used by `Sdk.mm`:
+  /// `pushSubscribe:profileFields:customFields:cats:replace:skipTriggers:`
   @objc(pushSubscribe:profileFields:customFields:cats:replace:skipTriggers:)
   public func pushSubscribe(
     _ sync: NSNumber?,
@@ -635,9 +557,10 @@ public final class SdkModule: NSObject {
     )
   }
 
-  /// Suspends current push subscription (temporarily disables).
+  /// Suspends current push subscription.
   ///
-  /// ObjC selector used by `Sdk.mm`: `pushSuspend:profileFields:customFields:cats:replace:skipTriggers:`
+  /// ObjC selector used by `Sdk.mm`:
+  /// `pushSuspend:profileFields:customFields:cats:replace:skipTriggers:`
   @objc(pushSuspend:profileFields:customFields:cats:replace:skipTriggers:)
   public func pushSuspend(
     _ sync: NSNumber?,
@@ -665,7 +588,8 @@ public final class SdkModule: NSObject {
 
   /// Unsubscribes (disables) current push subscription.
   ///
-  /// ObjC selector used by `Sdk.mm`: `pushUnSubscribe:profileFields:customFields:cats:replace:skipTriggers:`
+  /// ObjC selector used by `Sdk.mm`:
+  /// `pushUnSubscribe:profileFields:customFields:cats:replace:skipTriggers:`
   @objc(pushUnSubscribe:profileFields:customFields:cats:replace:skipTriggers:)
   public func pushUnSubscribe(
     _ sync: NSNumber?,
@@ -691,16 +615,13 @@ public final class SdkModule: NSObject {
     )
   }
 
-  // MARK: - ✅ MobileEvent (RN bridge)
+  // MARK: - Mobile Events
 
-  /// Sends a generic mobile event (non-push) to Altcraft via the SDK.
+  /// Sends a mobile event to Altcraft via SDK.
   ///
-  /// ObjC selector used by `Sdk.mm`: `mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:`
-  ///
-  /// Notes:
-  /// - `subscription` and `utm` are not bridged from RN yet (passed as nil).
-  /// - `altcraftClientID` is currently passed as an empty string to match existing native behavior.
-  @objc(mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:)
+  /// ObjC selector used by `Sdk.mm`:
+  /// `mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:utm:`
+  @objc(mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:utm:)
   public func mobileEvent(
     _ sid: String,
     eventName: String,
@@ -708,36 +629,47 @@ public final class SdkModule: NSObject {
     payload: NSDictionary?,
     matching: NSDictionary?,
     matchingType: String?,
-    profileFields: NSDictionary?
+    profileFields: NSDictionary?,
+    utm: NSDictionary?
   ) {
     ensureProvidersInstalled()
 
-    let payloadAny = toAnyDict(payload)
-    let matchingAny = toAnyDict(matching)
-    let profileAny = toAnyDict(profileFields)
+    let payloadNorm = toAnyDict(payload)
+    let matchingNorm = toAnyDict(matching)
+    let profileNorm = toAnyDict(profileFields)
+    let utmNorm = Converter.toAnyDict(utm)
+
+    let utmObj: UTM? = utmNorm.flatMap {
+      UTM(
+        campaign: $0["campaign"] as? String,
+        content: $0["content"] as? String,
+        keyword: $0["keyword"] as? String,
+        medium: $0["medium"] as? String,
+        source: $0["source"] as? String,
+        temp: $0["temp"] as? String
+      )
+    }
 
     AltcraftSDK.shared.mobileEventFunctions.mobileEvent(
       sid: sid,
       altcraftClientID: "",
       eventName: eventName,
       sendMessageId: sendMessageId,
-      payload: payloadAny,
-      matching: matchingAny,
+      payload: payloadNorm,
+      matching: matchingNorm,
       matchingType: matchingType,
-      profileFields: profileAny,
+      profileFields: profileNorm,
       subscription: nil,
-      utm: nil
+      utm: utmObj
     )
   }
 
-  // MARK: - ✅ PushSubscription promise API for RN (ResponseWithHttpCode | null)
+  // MARK: - Promise API: PushSubscription status/results
 
-  /// Helper: converts `nil` to `NSNull()` for JS payloads.
+  /// Converts `nil` to `NSNull()` for JS payloads.
   private func nsNull(_ v: Any?) -> Any { v ?? NSNull() }
 
-  /// Converts an arbitrary `[String: Any?]` map into a `[String: String]` map.
-  ///
-  /// Used for fields mapping in subscription-related responses.
+  /// Converts `[String: Any?]` to `[String: String]`.
   private func toStringMap(_ dict: [String: Any?]?) -> [String: String]? {
     guard let dict, !dict.isEmpty else { return nil }
     var out: [String: String] = [:]
@@ -749,7 +681,6 @@ public final class SdkModule: NSObject {
     return out.isEmpty ? nil : out
   }
 
-  /// Maps SDK category model to JS object.
   private func mapCategory(_ c: CategoryData) -> [String: Any] {
     [
       "name": nsNull(c.name),
@@ -759,7 +690,6 @@ public final class SdkModule: NSObject {
     ]
   }
 
-  /// Maps SDK subscription model to JS object.
   private func mapSubscription(_ s: SubscriptionData) -> [String: Any] {
     let fieldsString = toStringMap(s.fields)
     let catsArr: [[String: Any]]? = s.cats?.map { mapCategory($0) }
@@ -774,7 +704,6 @@ public final class SdkModule: NSObject {
     ]
   }
 
-  /// Maps SDK profile model to JS object.
   private func mapProfile(_ p: ProfileData) -> [String: Any] {
     let subDict: [String: Any]? = p.subscription.map { mapSubscription($0) }
     return [
@@ -785,7 +714,6 @@ public final class SdkModule: NSObject {
     ]
   }
 
-  /// Maps SDK response model to JS object.
   private func mapResponse(_ r: Response) -> [String: Any] {
     let profileDict: [String: Any]? = r.profile.map { mapProfile($0) }
     return [
@@ -795,7 +723,6 @@ public final class SdkModule: NSObject {
     ]
   }
 
-  /// Maps SDK response-with-http model to JS object.
   private func mapResponseWithHttp(_ r: ResponseWithHttp) -> [String: Any] {
     let respDict: [String: Any]? = r.response.map { mapResponse($0) }
     return [
@@ -805,15 +732,12 @@ public final class SdkModule: NSObject {
   }
 
   /// Attempts to un-suspend a push subscription.
-  ///
-  /// Promise contract:
-  /// - Resolves with `null` if SDK returns nil.
-  /// - Resolves with `{ httpCode, response }` if available.
   @objc(unSuspendPushSubscriptionWithResolver:rejecter:)
   public func unSuspendPushSubscription(
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    _ = reject
     ensureProvidersInstalled()
 
     AltcraftSDK.shared.pushSubscriptionFunctions.unSuspendPushSubscription { result in
@@ -823,15 +747,12 @@ public final class SdkModule: NSObject {
   }
 
   /// Returns status of the latest subscription operation.
-  ///
-  /// Promise contract:
-  /// - Resolves with `null` if SDK returns nil.
-  /// - Resolves with `{ httpCode, response }` if available.
   @objc(getStatusOfLatestSubscriptionWithResolver:rejecter:)
   public func getStatusOfLatestSubscription(
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    _ = reject
     ensureProvidersInstalled()
 
     AltcraftSDK.shared.pushSubscriptionFunctions.getStatusOfLatestSubscription { result in
@@ -841,15 +762,12 @@ public final class SdkModule: NSObject {
   }
 
   /// Returns status of the current subscription.
-  ///
-  /// Promise contract:
-  /// - Resolves with `null` if SDK returns nil.
-  /// - Resolves with `{ httpCode, response }` if available.
   @objc(getStatusForCurrentSubscriptionWithResolver:rejecter:)
   public func getStatusForCurrentSubscription(
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    _ = reject
     ensureProvidersInstalled()
 
     AltcraftSDK.shared.pushSubscriptionFunctions.getStatusForCurrentSubscription { result in
@@ -859,16 +777,13 @@ public final class SdkModule: NSObject {
   }
 
   /// Returns status of the latest subscription operation for a specific provider.
-  ///
-  /// Promise contract:
-  /// - Resolves with `null` if SDK returns nil.
-  /// - Resolves with `{ httpCode, response }` if available.
   @objc(getStatusOfLatestSubscriptionForProviderWithProvider:resolver:rejecter:)
   public func getStatusOfLatestSubscriptionForProvider(
     provider: String?,
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    _ = reject
     ensureProvidersInstalled()
 
     AltcraftSDK.shared.pushSubscriptionFunctions.getStatusOfLatestSubscriptionForProvider(provider: provider) { result in
@@ -876,13 +791,39 @@ public final class SdkModule: NSObject {
       resolve(self.mapResponseWithHttp(result))
     }
   }
-}
 
-// MARK: - Notification name
+  // MARK: - UserDefaults
 
-extension Notification.Name {
-  /// Notification posted when an SDK event is forwarded to JS.
+  /// Stores a value into UserDefaults.
   ///
-  /// Must match ObjC++ constant: `SdkEventsNotificationName = @"AltcraftSdkEventNotification"`.
-  static let altcraftSdkEventNotification = Notification.Name("AltcraftSdkEventNotification")
+  /// - suiteName != nil: uses UserDefaults(suiteName:) (App Group)
+  /// - suiteName == nil: uses UserDefaults.standard
+  /// - nil/NSNull: removes the key
+  /// - values are normalized and stored as property list types when possible
+  @objc(setUserDefaultsValueWithSuiteName:key:value:)
+  public func setUserDefaultsValue(
+    suiteName: String?,
+    key: String,
+    value: Any?
+  ) {
+    let k = key.trimmingCharacters(in: .whitespacesAndNewlines)
+    if k.isEmpty { return }
+
+    let sn = suiteName?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let ud: UserDefaults = {
+      if let sn, !sn.isEmpty, let g = UserDefaults(suiteName: sn) { return g }
+      return .standard
+    }()
+
+    if value == nil || value is NSNull {
+      ud.removeObject(forKey: k)
+      return
+    }
+
+    if let plist = Converter.toPropertyListValue(value) {
+      ud.set(plist, forKey: k)
+    } else {
+      ud.removeObject(forKey: k)
+    }
+  }
 }

@@ -7,7 +7,16 @@ export type CategoryData = {
   title?: string | null;
   steady?: boolean | null;
   active?: boolean | null;
-}
+};
+
+export type UTM = {
+  campaign?: string | null;
+  content?: string | null;
+  keyword?: string | null;
+  medium?: string | null;
+  source?: string | null;
+  temp?: string | null;
+};
 
 export type SubscriptionData = {
   subscriptionId?: string | null;
@@ -18,7 +27,7 @@ export type SubscriptionData = {
   fields?: { [key: string]: string } | null;
 
   cats?: CategoryData[] | null;
-}
+};
 
 export interface ProfileData {
   id?: string | null;
@@ -85,7 +94,7 @@ export interface Spec extends TurboModule {
   setApnsToken(token: string | null): void; // iOS-only (no-op on Android)
   setRustoreToken(token: string | null): void; // Android-only (no-op on iOS)
 
-  // subscription (✅ string maps in spec)
+  // subscription
   pushSubscribe(
     sync: boolean | null,
     profileFields: { [key: string]: string } | null,
@@ -140,10 +149,10 @@ export interface Spec extends TurboModule {
 
   // sdk
   clear(): Promise<void>;
-  reinitializeRetryControlInThisSession(): void;
+  unlockInitOperationsInThisSession(): void;
   requestNotificationPermission(): void;
 
-  // mobile events (✅ string maps in spec)
+  // mobile events
   mobileEvent(
     sid: string,
     eventName: string,
@@ -151,18 +160,28 @@ export interface Spec extends TurboModule {
     payload: { [key: string]: string } | null,
     matching: { [key: string]: string } | null,
     matchingType: string | null,
-    profileFields: { [key: string]: string } | null
+    profileFields: { [key: string]: string } | null,
+    utm: UTM | null
   ): void;
 
+  // push event delivery
   deliveryEvent(
     message: { [key: string]: string } | null,
     messageUID: string | null
   ): void;
 
+  // push event open
   openEvent(
     message: { [key: string]: string } | null,
     messageUID: string | null
   ): void;
+
+ // set UserDefault
+ setUserDefaultsValue(
+  suiteName: string | null,
+  key: string,
+  value: string | null
+): void;
 }
 
 // ---------------- Export ----------------

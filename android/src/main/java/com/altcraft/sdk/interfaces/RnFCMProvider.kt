@@ -6,7 +6,6 @@ import com.altcraft.sdk.interfaces.FCMInterface
 
 @Keep
 object RnFCMProvider : FCMInterface {
-
     @Volatile
     private var token: String? = null
 
