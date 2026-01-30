@@ -1,4 +1,5 @@
-import { NativeEventEmitter } from 'react-native';
+import { NativeEventEmitter, NativeModules } from 'react-native';
+
 import NativeSDK, {
   type AltcraftConfig,
   type CategoryData,
@@ -6,137 +7,124 @@ import NativeSDK, {
   type TokenData,
 } from './NativeSdk';
 
-/**
- * SDK event payload emitted from the native layer via NativeEventEmitter.
- *
- * Native sources (conceptually):
- * - Android (Kotlin): SDK Events module -> emits "AltcraftSdkEvent"
- * - iOS (Swift): SDKEvents.shared -> bridge -> emits "AltcraftSdkEvent"
- *
- * Fields:
- * - function: origin function/context name in the SDK
- * - code: optional numeric code (HTTP/internal/etc.)
- * - message: human-readable message
- * - type: event category ("event" | "error" | "retryError")
- * - value: optional extra data/context
- */
+/** SDK event payload emitted from native via NativeEventEmitter ("AltcraftSdkEvent"). */
 export type SdkEvent = {
   function: string;
   code: number | null;
   message: string;
   type: 'event' | 'error' | 'retryError';
-  value?: { [key: string]: any } | null;
+  value?: Record<string, unknown> | null;
 };
 
-/**
- * Converts a JS object to a string-to-string map suitable for passing through the RN bridge.
- *
- * Why:
- * - TurboModules/bridges often prefer primitive types and predictable structures.
- * - Native SDK public APIs frequently accept Map<String, String> (Android) / bridged dictionaries (iOS).
- *
- * Behavior:
- * - null/undefined values are skipped
- * - all other values are coerced via `String(v)`
- * - returns `null` if the resulting map is empty (native side can treat it as "not provided")
- */
-function toNativeStringMap(
-  input: { [key: string]: any } | null
-): { [key: string]: string } | null {
-  if (!input) return null;
+/** UTM tags for mobileEvent attribution. */
+export type UTM = {
+  campaign?: string | null;
+  content?: string | null;
+  keyword?: string | null;
+  medium?: string | null;
+  source?: string | null;
+  temp?: string | null;
+};
 
-  const out: { [key: string]: string } = {};
-  for (const [k, v] of Object.entries(input)) {
-    if (v == null) continue;
-    out[k] = String(v);
+// ---------------- Utilities ----------------
+
+/** Converts a JS object to { [key: string]: string } for the RN bridge; drops null/undefined. */
+function toNativeStringMap(
+  input: Record<string, unknown> | null
+): Record<string, string> | null {
+  if (input == null) return null;
+
+  const out: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(input)) {
+    if (value == null) continue; 
+
+    switch (typeof value) {
+      case 'string':
+        out[key] = value;
+        break;
+
+      case 'number':
+      case 'boolean':
+      case 'bigint':
+        out[key] = String(value);
+        break;
+
+      default:
+        try {
+          out[key] = JSON.stringify(value);
+        } catch {
+          out[key] = String(value);
+        }
+        break;
+    }
   }
 
   return Object.keys(out).length > 0 ? out : null;
 }
 
 /**
- * JS-side abstraction for handling incoming push payloads.
- *
- * Native analogy:
- * - Android: `AltcraftSDK.PushReceiver` + `PushReceiver.takePush(context, message)`
- *
- * In RN:
- * - `takePush(...)` always forwards the payload to native (`NativeSdk.takePush`)
- * - then optionally dispatches it to registered JS receivers (`PushReceiver`)
- *
- * This provides:
- * - centralized forwarding to the Altcraft native SDK (parsing/internal flows)
- * - optional additional JS-level handling (logging, routing, analytics, debugging)
+ * New Arch safe:
+ * TurboModule codegen does NOT support `any`.
+ * Therefore, we serialize any value for UserDefaults into `string`:
+ * - string -> as-is
+ * - number/boolean -> String(...)
+ * - object/array -> JSON.stringify(...)
+ * - null/undefined -> null (native side can treat it as “remove key”)
  */
-export abstract class PushReceiver {
-  /**
-   * Called when the JS facade receives a push payload.
-   *
-   * @param message Flat `Record<string, string>` (matches typical data payload shape).
-   */
-  abstract pushHandler(message: { [key: string]: string }): void;
+function toUserDefaultsString(value: unknown): string | null {
+  if (value == null) return null;
+
+  const t = typeof value;
+
+  if (t === 'string') return String(value);
+  if (t === 'number' || t === 'boolean') return String(value);
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
-/**
- * Registered JS receivers for push payload dispatch.
- * If none are registered, a DefaultPushReceiver will log the payload.
- */
+// ---------------- PushReceiver API (JS-side) ----------------
+
+/** JS handler interface for incoming push payloads. */
+export abstract class PushReceiver {
+  /** Called with a flat push payload map. */
+  abstract pushHandler(message: Record<string, string>): void;
+}
+
+/** Registered JS receivers for push payloads. */
 const registeredPushReceivers: PushReceiver[] = [];
 
-/**
- * Registers a JS receiver for incoming push payloads.
- *
- * Typically called once during app startup.
- *
- * @param receiver Implementation of `PushReceiver`.
- */
+/** Registers a JS push receiver. */
 export function registerPushReceiver(receiver: PushReceiver): void {
   registeredPushReceivers.push(receiver);
 }
 
-/**
- * Clears all registered push receivers.
- *
- * Useful for tests or reinitializing the integration layer.
- */
+/** Clears all JS push receivers. */
 export function clearPushReceivers(): void {
   registeredPushReceivers.length = 0;
 }
 
-/**
- * Default receiver used when no custom receivers are registered.
- * Prevents silent drops during integration and provides visibility via console logs.
- */
+/** Default receiver used when none are registered. */
 class DefaultPushReceiver extends PushReceiver {
-  override pushHandler(message: { [key: string]: string }): void {
+  override pushHandler(message: Record<string, string>): void {
     // eslint-disable-next-line no-console
     console.log('[AltcraftSDK] Default push handler:', message);
   }
 }
 
 /**
- * Forwards an incoming push payload to the native Altcraft SDK and then to JS receivers.
- *
- * Native analogy:
- * - Android: `AltcraftSDK.PushReceiver.takePush(context, message)`
- *
- * Important:
- * - This method does NOT intercept notifications by itself.
- *   Platform-level interception must be implemented separately:
- *   - Android: FCM/HMS service -> call `takePush(message.data)`
- *   - iOS: AppDelegate / UNUserNotificationCenter / Notification Service Extension -> call `takePush(userInfo)`
- *
- * @param message Flat push payload map. Empty payloads are ignored.
+ * Forwards a push payload to native SDK and then to JS receivers.
+ * This does not intercept system notifications by itself.
  */
-export function takePush(message: { [key: string]: string }): void {
-  if (!message || Object.keys(message).length === 0) {
-    return;
-  }
+export function takePush(message: Record<string, string>): void {
+  if (!message || Object.keys(message).length === 0) return;
 
-  // 1) Always forward to native SDK for parsing/internal processing
   NativeSDK.takePush({ ...message });
 
-  // 2) Optionally forward to JS receivers (custom logic/analytics/debug)
   const receivers =
     registeredPushReceivers.length > 0
       ? registeredPushReceivers
@@ -154,30 +142,16 @@ export function takePush(message: { [key: string]: string }): void {
 
 // ---------------- Events API for RN ----------------
 
-/** RN subscription handle type (NativeEventEmitter). */
+/** RN subscription handle (NativeEventEmitter). */
 type EventsSubscription = { remove: () => void } | null;
 
-/**
- * Native event emitter used to receive SDK events from the native bridge.
- * Event name: "AltcraftSdkEvent"
- */
-const nativeEventEmitter = new NativeEventEmitter(NativeSDK as any);
+/** Native emitter for "AltcraftSdkEvent". */
+const nativeEventEmitter = new NativeEventEmitter(NativeModules.SDKEventEmitter);
 
-/**
- * Current active subscription to native SDK events.
- * Only one subscription is maintained; re-subscribing replaces the previous one.
- */
+/** Current JS-side subscription. */
 let eventsSubscription: EventsSubscription = null;
 
-/**
- * Subscribes to Altcraft SDK events and starts streaming them from native to JS.
- *
- * Contract:
- * - If a previous subscription exists, it is removed.
- * - Calls `NativeSdk.subscribeToEvents()` so the native side starts emitting events.
- *
- * @param handler JS handler invoked for each SDK event.
- */
+/** Subscribes to native SDK events and routes them to the handler. */
 export function subscribeToEvents(handler: (event: SdkEvent) => void): void {
   if (eventsSubscription) {
     eventsSubscription.remove();
@@ -188,27 +162,20 @@ export function subscribeToEvents(handler: (event: SdkEvent) => void): void {
 
   eventsSubscription = nativeEventEmitter.addListener(
     'AltcraftSdkEvent',
-    (...args: any[]) => {
+    (...args: unknown[]) => {
       const event = (args[0] ?? null) as SdkEvent | null;
       if (!event) return;
 
       try {
         handler(event);
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.warn('[AltcraftSDK] subscribeToEvents handler error:', e);
       }
     }
   );
 }
 
-/**
- * Unsubscribes from Altcraft SDK events.
- *
- * Behavior:
- * - removes the JS listener
- * - calls `NativeSdk.unsubscribeFromEvent()` to stop native emissions
- */
+/** Unsubscribes from native SDK events. */
 export function unsubscribeFromEvent(): void {
   if (eventsSubscription) {
     eventsSubscription.remove();
@@ -218,122 +185,57 @@ export function unsubscribeFromEvent(): void {
   NativeSDK.unsubscribeFromEvent();
 }
 
-// ---------------- existing public SDK API ----------------
+// ---------------- SDK API ----------------
 
-/**
- * Initializes the Altcraft SDK.
- *
- * Native equivalents:
- * - Android: `AltcraftSDK.initialization(context, configuration, complete)`
- * - iOS: `AltcraftSDK.shared.initialization(configuration, completion)`
- *
- * Promise:
- * - resolves on success
- *
- * ⚠️ Can throw (reject):
- * - configuration mapping/validation errors on native side
- * - native initialization failure (e.g. missing required fields, internal init error)
- *
- * @param config SDK configuration (apiUrl is required).
- */
+/** Initializes the Altcraft SDK. */
 export function initialize(config: AltcraftConfig): Promise<void> {
   return NativeSDK.initialize(config);
 }
 
-/**
- * Sets/clears the JWT used by the SDK for authenticated requests.
- *
- * Native concept:
- * - Android/iOS register a JWT provider; RN uses an internal provider backed by this token.
- *
- * Semantics:
- * - token === null -> clear JWT provider/token
- * - token !== null -> store token and enable provider
- *
- * @param token JWT string or null to clear.
- */
+/** Sets or clears the JWT used by the SDK. */
 export function setJwt(token: string | null): void {
   return NativeSDK.setJwt(token);
 }
 
 // platform-specific token setters
 
-/**
- * Android-only: sets the FCM token to be used by the SDK.
- *
- * Typical usage:
- * - after `messaging().getToken()`
- * - when the token refreshes
- *
- * @param token FCM token or null to clear/unset.
- */
+/** Android-only: sets FCM token. */
 export function setAndroidFcmToken(token: string | null): void {
   return NativeSDK.setAndroidFcmToken(token);
 }
 
-/**
- * iOS-only: kept for API symmetry (may be a no-op on other platforms).
- *
- * @param token iOS FCM token or null.
- */
+/** iOS-only: sets FCM token. */
 export function setIosFcmToken(token: string | null): void {
   return NativeSDK.setIosFcmToken(token);
 }
 
-/**
- * Android-only: sets the HMS token.
- *
- * @param token HMS token or null.
- */
+/** Android-only: sets HMS token. */
 export function setAndroidHmsToken(token: string | null): void {
   return NativeSDK.setAndroidHmsToken(token);
 }
 
-/**
- * iOS-only: kept for API symmetry (may be a no-op on other platforms).
- *
- * @param token iOS HMS token or null.
- */
+/** iOS-only: sets HMS token. */
 export function setIosHmsToken(token: string | null): void {
   return NativeSDK.setIosHmsToken(token);
 }
 
-// other tokens
-
-/**
- * iOS-only: sets the APNs token (usually forwarded from AppDelegate).
- *
- * Note:
- * - APNs token is commonly represented as a hex string on native side.
- *
- * @param token APNs token as hex string or null.
- */
+/** iOS-only: sets APNs token. */
 export function setApnsToken(token: string | null): void {
   return NativeSDK.setApnsToken(token);
 }
 
-/**
- * Android-only: sets the RuStore token.
- *
- * @param token RuStore token or null.
- */
+/** Android-only: sets RuStore token. */
 export function setRustoreToken(token: string | null): void {
   return NativeSDK.setRustoreToken(token);
 }
 
-// ---------------- subscription (public: any, native: string) ----------------
+// ---------------- subscription (public: unknown, native: string) ----------------
 
-/**
- * Performs a push subscribe request.
- *
- * Notes:
- * - fire-and-forget: results/errors are delivered via the SDK Events stream
- * - `sync` is forwarded to the SDK/server semantics
- */
+/** Push subscribe (fire-and-forget). */
 export function pushSubscribe(
   sync: boolean | null = true,
-  profileFields: { [key: string]: any } | null = null,
-  customFields: { [key: string]: any } | null = null,
+  profileFields: Record<string, unknown> | null = null,
+  customFields: Record<string, unknown> | null = null,
   cats: CategoryData[] | null = null,
   replace: boolean | null = null,
   skipTriggers: boolean | null = null
@@ -348,16 +250,11 @@ export function pushSubscribe(
   );
 }
 
-/**
- * Suspends push notifications for the current profile/subscription.
- *
- * Same parameter semantics as `pushSubscribe`.
- * Results/errors are delivered via the SDK Events stream.
- */
+/** Push suspend (fire-and-forget). */
 export function pushSuspend(
   sync: boolean | null = true,
-  profileFields: { [key: string]: any } | null = null,
-  customFields: { [key: string]: any } | null = null,
+  profileFields: Record<string, unknown> | null = null,
+  customFields: Record<string, unknown> | null = null,
   cats: CategoryData[] | null = null,
   replace: boolean | null = null,
   skipTriggers: boolean | null = null
@@ -372,16 +269,11 @@ export function pushSuspend(
   );
 }
 
-/**
- * Performs a push unsubscribe request.
- *
- * Same parameter semantics as `pushSubscribe`.
- * Results/errors are delivered via the SDK Events stream.
- */
+/** Push unsubscribe (fire-and-forget). */
 export function pushUnSubscribe(
   sync: boolean | null = true,
-  profileFields: { [key: string]: any } | null = null,
-  customFields: { [key: string]: any } | null = null,
+  profileFields: Record<string, unknown> | null = null,
+  customFields: Record<string, unknown> | null = null,
   cats: CategoryData[] | null = null,
   replace: boolean | null = null,
   skipTriggers: boolean | null = null
@@ -396,170 +288,98 @@ export function pushUnSubscribe(
   );
 }
 
-/**
- * Sends an "unSuspend" request and returns the response wrapped with HTTP status code.
- *
- * ⚠️ Can throw (reject):
- * - native validation failure (missing data to create request)
- * - request creation/sending failures
- * - unexpected native exceptions
- *
- * @returns `ResponseWithHttpCode | null`
- */
+/** Un-suspends push subscription and returns response (if any). */
 export function unSuspendPushSubscription(): Promise<ResponseWithHttpCode | null> {
   return NativeSDK.unSuspendPushSubscription();
 }
 
-/**
- * Returns the status of the latest subscription request stored in the profile.
- *
- * ⚠️ Can throw (reject) on native request creation/sending failures or unexpected exceptions.
- */
+/** Returns latest subscription status (if any). */
 export function getStatusOfLatestSubscription(): Promise<ResponseWithHttpCode | null> {
   return NativeSDK.getStatusOfLatestSubscription();
 }
 
-/**
- * Returns the status of the latest subscription for the specified provider.
- * If provider is null, native SDK may use the current provider (SDK-specific).
- *
- * ⚠️ Can throw (reject):
- * - invalid provider
- * - native request creation/sending failures
- * - unexpected native exceptions
- *
- * @param provider Provider identifier or null.
- */
+/** Returns latest subscription status for a provider (if any). */
 export function getStatusOfLatestSubscriptionForProvider(
   provider: string | null = null
 ): Promise<ResponseWithHttpCode | null> {
   return NativeSDK.getStatusOfLatestSubscriptionForProvider(provider);
 }
 
-/**
- * Returns the status for the "current subscription context" (current provider + current token),
- * according to native SDK rules.
- *
- * ⚠️ Can throw (reject) on native request creation/sending failures or unexpected exceptions.
- */
+/** Returns current subscription status (if any). */
 export function getStatusForCurrentSubscription(): Promise<ResponseWithHttpCode | null> {
   return NativeSDK.getStatusForCurrentSubscription();
 }
 
 // ---------------- token public API ----------------
 
-/**
- * Returns the current push token selected/managed by the SDK.
- *
- * ⚠️ Can throw (reject) on unexpected native errors.
- *
- * May resolve `null` if token is not yet available or providers are not configured.
- */
+/** Returns current push token (or null). */
 export function getPushToken(): Promise<TokenData | null> {
   return NativeSDK.getPushToken();
 }
 
-/**
- * Deletes the device token for a given provider.
- *
- * ⚠️ Can throw (reject):
- * - provider is null/invalid
- * - native deletion flow fails
- * - unexpected native exceptions
- *
- * @param provider Provider identifier (or null; native may treat this as invalid).
- */
+/** Deletes device token for provider. */
 export function deleteDeviceToken(provider: string | null): Promise<void> {
   return NativeSDK.deleteDeviceToken(provider);
 }
 
-/**
- * Forces a token refresh flow.
- *
- * ⚠️ Can throw (reject) on native failures or unexpected exceptions.
- */
+/** Forces token refresh flow. */
 export function forcedTokenUpdate(): Promise<void> {
   return NativeSDK.forcedTokenUpdate();
 }
 
-/**
- * Updates the provider priority list used by the SDK to select a push provider.
- *
- * ⚠️ Can throw (reject):
- * - invalid provider list (unknown identifiers)
- * - native update flow failure
- * - unexpected native exceptions
- *
- * @param priorityList Ordered list of provider IDs, or null.
- */
+/** Updates provider priority list. */
 export function changePushProviderPriorityList(
   priorityList: string[] | null
 ): Promise<void> {
   return NativeSDK.changePushProviderPriorityList(priorityList);
 }
 
-/**
- * Sets (or clears) a token for a specific provider.
-  
- * 
- * ⚠️ Can throw (reject):
- * - provider is invalid/blank (native validation)
- * - native set/delete flow fails
- * - unexpected native exceptions
- *
- * @param provider Provider identifier.
- * @param token Token string or null to clear.
- */
+/** Sets or clears token for a specific provider. */
 export function setPushToken(provider: string, token: string | null): Promise<void> {
   return NativeSDK.setPushToken(provider, token);
 }
 
 // ---------------- sdk wrappers ----------------
 
-/**
- * Clears SDK local state and stops active SDK background work (SDK-specific).
- *
- * ⚠️ Can throw (reject) on unexpected native errors.
- */
+/** Clears SDK local state. */
 export function clear(): Promise<void> {
   return NativeSDK.clear();
 }
 
-/**
- * Resets retry-control state in the current session to allow retry/re-init flows again.
- * This is a session-level unlock, not a full SDK reset.
- */
-export function reinitializeRetryControlInThisSession(): void {
-  return NativeSDK.reinitializeRetryControlInThisSession();
+/** Resets session init-control state (platform-dependent). */
+export function unlockInitOperationsInThisSession(): void {
+  return NativeSDK.unlockInitOperationsInThisSession();
 }
 
-/**
- * Requests notification permission (where applicable).
- *
- * Note:
- * - Usually no Promise here; native may silently no-op if not supported.
- */
+/** Requests notification permission (platform-dependent). */
 export function requestNotificationPermission(): void {
   return NativeSDK.requestNotificationPermission();
 }
 
-// ---------------- MobileEvent (public: any, native: string) ----------------
+// ---------------- UserDefaults / SharedPreferences ----------------
 
-/**
- * Sends a "mobile event" (non-push event) to Altcraft backend.
- *
- * Note:
- * - This is fire-and-forget and does not return a Promise.
- * - Any errors are expected to be surfaced via SDK Events stream (if enabled) or native logs.
- */
+/** Stores a value into native UserDefaults / SharedPreferences (platform-dependent). */
+export function setUserDefaultsValue(
+  suiteName: string | null,
+  key: string,
+  value: unknown
+): void {
+  const str = toUserDefaultsString(value);
+  return NativeSDK.setUserDefaultsValue(suiteName, key, str);
+}
+
+// ---------------- MobileEvent (public: unknown, native: string) ----------------
+
+/** Sends a mobile event (fire-and-forget). */
 export function mobileEvent(
   sid: string,
   eventName: string,
   sendMessageId: string | null = null,
-  payload: { [key: string]: any } | null = null,
-  matching: { [key: string]: any } | null = null,
+  payload: Record<string, unknown> | null = null,
+  matching: Record<string, unknown> | null = null,
   matchingType: string | null = null,
-  profileFields: { [key: string]: any } | null = null
+  profileFields: Record<string, unknown> | null = null,
+  utm: UTM | null = null
 ): void {
   NativeSDK.mobileEvent(
     sid,
@@ -568,76 +388,47 @@ export function mobileEvent(
     toNativeStringMap(payload),
     toNativeStringMap(matching),
     matchingType,
-    toNativeStringMap(profileFields)
+    toNativeStringMap(profileFields),
+    utm
   );
 }
 
-/**
- * Manually registers a "delivery" event for a push notification.
- *
- * Note:
- * - Fire-and-forget (no Promise). Native errors should be emitted as SDK events or logs.
- */
+/** Manually records a push delivery event (fire-and-forget). */
 export function deliveryEvent(
-  message: { [key: string]: string } | null = null,
+  message: Record<string, string> | null = null,
   messageUID: string | null = null
 ): void {
   const nativePayload =
     message && Object.keys(message).length > 0 ? { ...message } : null;
 
-  (NativeSDK as any).deliveryEvent(nativePayload, messageUID);
+  // Kept as runtime call for backward-compat if some platform exposes it outside codegen.
+  (NativeSDK as unknown as { deliveryEvent: (m: Record<string, string> | null, uid: string | null) => void })
+    .deliveryEvent(nativePayload, messageUID);
 }
 
-/**
- * Manually registers an "open" event for a push notification.
- *
- * Note:
- * - Fire-and-forget (no Promise). Native errors should be emitted as SDK events or logs.
- */
+/** Manually records a push open event (fire-and-forget). */
 export function openEvent(
-  message: { [key: string]: string } | null = null,
+  message: Record<string, string> | null = null,
   messageUID: string | null = null
 ): void {
   const nativePayload =
     message && Object.keys(message).length > 0 ? { ...message } : null;
 
-  (NativeSDK as any).openEvent(nativePayload, messageUID);
+  // Kept as runtime call for backward-compat if some platform exposes it outside codegen.
+  (NativeSDK as unknown as { openEvent: (m: Record<string, string> | null, uid: string | null) => void })
+    .openEvent(nativePayload, messageUID);
 }
 
 // ---------------- Default export ----------------
 
-/**
- * Public React Native facade for the Altcraft SDK.
- *
- * Promise-returning methods (can throw on `await` / reject):
- * - initialize
- * - unSuspendPushSubscription
- * - getStatusOfLatestSubscription
- * - getStatusOfLatestSubscriptionForProvider
- * - getStatusForCurrentSubscription
- * - getPushToken
- * - deleteDeviceToken
- * - forcedTokenUpdate
- * - changePushProviderPriorityList
- * - setPushToken
- * - clear
- */
+/** Public React Native facade for the Altcraft SDK. */
 const AltcraftSDK = {
   initialize,
   setJwt,
 
-  setAndroidFcmToken,
-  setIosFcmToken,
-  setAndroidHmsToken,
-  setIosHmsToken,
-
-  setApnsToken,
-  setRustoreToken,
-
   pushSubscribe,
   pushSuspend,
   pushUnSubscribe,
-
   unSuspendPushSubscription,
   getStatusOfLatestSubscription,
   getStatusOfLatestSubscriptionForProvider,
@@ -649,22 +440,33 @@ const AltcraftSDK = {
   changePushProviderPriorityList,
   setPushToken,
 
-  clear,
-  reinitializeRetryControlInThisSession,
-  requestNotificationPermission,
 
   mobileEvent,
-
-  PushReceiver,
-  registerPushReceiver,
-  clearPushReceivers,
-  takePush,
 
   subscribeToEvents,
   unsubscribeFromEvent,
 
+  clear,
+
+  //ios only
+  setIosFcmToken,
+  setIosHmsToken,
+  setApnsToken,
+  setUserDefaultsValue,
+
+  //android only
+  setAndroidFcmToken,
+  setAndroidHmsToken,
+  setRustoreToken,
+  PushReceiver,
+  registerPushReceiver,
+  clearPushReceivers,
+  takePush,
   deliveryEvent,
   openEvent,
+  unlockInitOperationsInThisSession,
+  requestNotificationPermission,
+
 };
 
 export default AltcraftSDK;

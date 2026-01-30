@@ -73,17 +73,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     SdkModule.shared.setAPNS(hex)
   }
 
-  func application(
-    _ application: UIApplication,
-    didFailToRegisterForRemoteNotificationsWithError error: Error
-  ) {
-    print("[AppDelegate] didFailToRegisterForRemoteNotifications:", error)
-  }
-
   func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
     print("[AppDelegate] FCM registration token:", fcmToken ?? "nil")
-    // если нужно:
-    // SdkAppModule.shared.setFCM(fcmToken)
+
   }
 
   func userNotificationCenter(
