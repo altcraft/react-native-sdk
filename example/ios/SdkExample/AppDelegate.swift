@@ -11,6 +11,12 @@ import FirebaseMessaging
 import Altcraft
 import Sdk
 
+private let APP_GROUP_SUITE = "group.your.id"
+
+private let jwtProvider = JWTProvider()
+private let apnsProvider = APNSProvider()
+private let fcmProvider = FCMProvider()
+
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
 
@@ -18,46 +24,45 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
+  private let apnsProvider = APNSProvider()
+
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-
-    AltcraftSDK.shared.setAppGroup(groupName: "group.altcraft.react.native.example")
-    AltcraftSDK.shared.notificationManager.registerForPushNotifications(for: application)
-
     if FirebaseApp.app() == nil {
       FirebaseApp.configure()
     }
-
-    UNUserNotificationCenter.current().delegate = self
-    Messaging.messaging().delegate = self
-
-    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-      if let error = error {
-        print("[AppDelegate] requestAuthorization error:", error)
-      }
-      print("[AppDelegate] requestAuthorization granted:", granted)
-
-      DispatchQueue.main.async {
-        application.registerForRemoteNotifications()
-      }
-    }
-
+    
+    // MARK: - Alctarft setting
+    
+    let altcraftSDK = AltcraftSDK.shared
+    altcraftSDK.setAppGroup(groupName: APP_GROUP_SUITE)
+    altcraftSDK.backgroundTasks.registerBackgroundTask()
+    altcraftSDK.setJWTProvider(provider: jwtProvider)
+    altcraftSDK.pushTokenFunction.setAPNSTokenProvider(
+      apnsProvider
+    )
+    altcraftSDK.pushTokenFunction.setFCMTokenProvider(
+      fcmProvider
+    )
+    altcraftSDK.notificationManager.registerForPushNotifications(
+      for: application
+    )
+    
+    // MARK: -
+    
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
 
     reactNativeDelegate = delegate
     reactNativeFactory = factory
-
-    window = UIWindow(frame: UIScreen.main.bounds)
-
-    factory.startReactNative(withModuleName: "SdkExample", in: window, launchOptions: launchOptions)
     
-    //AltcraftSDK.shared.backgroundTasks.registerBackgroundTask()
-    AltcraftSDK.shared.notificationManager.registerForPushNotifications(for: application)
-
+    window = UIWindow(frame: UIScreen.main.bounds)
+    factory.startReactNative(
+      withModuleName: "SdkExample", in: window, launchOptions: launchOptions
+    )
     return true
   }
 
@@ -65,29 +70,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
-    Messaging.messaging().apnsToken = deviceToken
-
-    let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-    print("[AppDelegate] APNs token hex:", hex)
-
-    SdkModule.shared.setAPNS(hex)
-  }
-
-  func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
-    print("[AppDelegate] FCM registration token:", fcmToken ?? "nil")
-
-  }
-
-  func userNotificationCenter(
-    _ center: UNUserNotificationCenter,
-    willPresent notification: UNNotification,
-    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-  ) {
-    completionHandler([.banner, .sound, .badge])
+    setAPNsTokenInUserDefault(deviceToken)
   }
 }
 
-class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
+// MARK: - React Native delegate
+
+final class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
   override func sourceURL(for bridge: RCTBridge) -> URL? { self.bundleURL() }
 
   override func bundleURL() -> URL? {
@@ -98,3 +87,4 @@ class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
 #endif
   }
 }
+

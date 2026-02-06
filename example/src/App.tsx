@@ -14,9 +14,10 @@ export default function App() {
 
   // Run App
   useEffect(() => {
-    // Push listeners
-    Push.registerBackgroundPush();
-    Push.registerForegroundPush();
+
+    Push.registerFCMPushTokenSync();
+    Push.registerFCMBackgroundPush();
+    Push.registerFCMForegroundPush();
 
     // SDK events
     subscribeToSdkEventsForTests((e) => {
@@ -31,8 +32,9 @@ export default function App() {
         await initializationSDK();
       } catch (e) {
         if (!cancelled) {
-          // eslint-disable-next-line no-console
-          console.warn('[initializationSDK] error:', e);
+          console.warn(
+            '[initializationSDK] error:', e
+          );
         }
       }
     })();

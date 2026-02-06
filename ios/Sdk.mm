@@ -1,4 +1,5 @@
-// ios/Sdk.mm
+// Sdk.mm
+
 #import "Sdk.h"
 
 #ifdef RCT_NEW_ARCH_ENABLED
@@ -23,7 +24,6 @@
 #if __has_include(<React/RCTCallableJSModules.h>)
 #import <React/RCTCallableJSModules.h>
 #else
-/// Minimal protocol for calling JS from native when headers are not available.
 @protocol RCTCallableJSModules <NSObject>
 - (void)invokeModule:(NSString *)moduleName
               method:(NSString *)methodName
@@ -32,12 +32,10 @@
 #endif
 
 #ifndef RCTPromiseResolveBlock
-/// React Native promise resolver.
 typedef void (^RCTPromiseResolveBlock)(id _Nullable result);
 #endif
 
 #ifndef RCTPromiseRejectBlock
-/// React Native promise rejecter.
 typedef void (^RCTPromiseRejectBlock)(NSString * _Nonnull code,
                                       NSString * _Nullable message,
                                       NSError * _Nullable error);
@@ -45,36 +43,30 @@ typedef void (^RCTPromiseRejectBlock)(NSString * _Nonnull code,
 
 #pragma mark - Runtime helpers
 
-/// Builds selector from string.
 static SEL SdkSel(NSString *name) {
   return NSSelectorFromString(name);
 }
 
-/// Returns YES if instance responds to selector.
 static BOOL SdkResponds(id obj, SEL sel) {
   return obj && sel && [obj respondsToSelector:sel];
 }
 
-/// Returns YES if class responds to selector.
 static BOOL SdkClassResponds(Class cls, SEL sel) {
   return cls && sel && [cls respondsToSelector:sel];
 }
 
 #pragma mark - NSNull -> nil
 
-/// Converts NSNull / kCFNull to nil (keeps other values as-is).
 static inline id SdkNilIfNSNull(id v) {
   return (v == (id)kCFNull || [v isKindOfClass:[NSNull class]]) ? nil : v;
 }
 
 #pragma mark - Swift runtime bridge (no Sdk-Swift.h needed)
 
-/// Returns SdkModule class if present (resolved by name at runtime).
 static Class SdkAppModuleClass(void) {
   Class cls = NSClassFromString(@"SdkModule");
 
 #ifdef DEBUG
-  // Debug-only: attempt to discover module name with namespace suffix.
   if (!cls) {
     int count = objc_getClassList(NULL, 0);
     if (count > 0) {
@@ -99,7 +91,6 @@ static Class SdkAppModuleClass(void) {
   return cls;
 }
 
-/// Returns shared Swift module instance via +[SdkModule shared].
 static id SdkAppModuleSharedInstance(void) {
   Class cls = SdkAppModuleClass();
   if (!cls) return nil;
@@ -114,7 +105,6 @@ static id SdkAppModuleSharedInstance(void) {
   return func((id)cls, sel);
 }
 
-/// Ensures push providers are installed/configured inside Swift module.
 static void EnsureProvidersInstalled(id instance) {
   if (!instance) return;
 
@@ -128,35 +118,8 @@ static void EnsureProvidersInstalled(id instance) {
   func(instance, sel);
 }
 
-/// Sets token on Swift module using a selector name.
-static void CallSetToken(id instance, NSString *selectorName, NSString * _Nullable token) {
-  if (!instance) return;
+#pragma mark - Swift calls (UserDefaults)
 
-  SEL sel = SdkSel(selectorName);
-  if (!SdkResponds(instance, sel)) return;
-
-  IMP imp = [instance methodForSelector:sel];
-  if (!imp) return;
-
-  void (*func)(id, SEL, id) = (void (*)(id, SEL, id))imp;
-  func(instance, sel, token);
-}
-
-/// Sets App Group name on Swift module.
-static void CallSetAppGroup(id instance, NSString * _Nullable groupName) {
-  if (!instance) return;
-
-  SEL sel = SdkSel(@"setAppGroupWithName:");
-  if (!SdkResponds(instance, sel)) return;
-
-  IMP imp = [instance methodForSelector:sel];
-  if (!imp) return;
-
-  void (*func)(id, SEL, id) = (void (*)(id, SEL, id))imp;
-  func(instance, sel, groupName);
-}
-
-///Stores a value in UserDefaults via Swift module.
 static void CallSetUserDefaultsValue(id instance,
                                      NSString * _Nullable suiteName,
                                      NSString *key,
@@ -173,21 +136,8 @@ static void CallSetUserDefaultsValue(id instance,
   func(instance, sel, suiteName, key, value);
 }
 
-/// Deletes device token for a provider on Swift module.
-static void CallDeleteDeviceToken(id instance, NSString * _Nullable provider, void (^completion)(BOOL ok)) {
-  if (!instance) { completion(NO); return; }
+#pragma mark - Push token API (ONLY getPushToken / setPushToken)
 
-  SEL sel = SdkSel(@"deleteDeviceTokenWithProvider:completion:");
-  if (!SdkResponds(instance, sel)) { completion(NO); return; }
-
-  IMP imp = [instance methodForSelector:sel];
-  if (!imp) { completion(NO); return; }
-
-  void (*func)(id, SEL, id, id) = (void (*)(id, SEL, id, id))imp;
-  func(instance, sel, provider, completion);
-}
-
-/// Retrieves current push token from Swift module.
 static void CallGetPushToken(id instance, void (^completion)(id _Nullable tokenObjC)) {
   if (!instance) { completion(nil); return; }
 
@@ -201,35 +151,6 @@ static void CallGetPushToken(id instance, void (^completion)(id _Nullable tokenO
   func(instance, sel, completion);
 }
 
-/// Forces token update on Swift module.
-static void CallForcedTokenUpdate(id instance, void (^completion)(void)) {
-  if (!instance) { completion(); return; }
-
-  SEL sel = SdkSel(@"forcedTokenUpdateWithCompletion:");
-  if (!SdkResponds(instance, sel)) { completion(); return; }
-
-  IMP imp = [instance methodForSelector:sel];
-  if (!imp) { completion(); return; }
-
-  void (*func)(id, SEL, id) = (void (*)(id, SEL, id))imp;
-  func(instance, sel, completion);
-}
-
-/// Changes push provider priority list on Swift module.
-static void CallChangeProviderPriorityList(id instance, NSArray * _Nullable list, void (^completion)(BOOL ok)) {
-  if (!instance) { completion(NO); return; }
-
-  SEL sel = SdkSel(@"changePushProviderPriorityListWithList:completion:");
-  if (!SdkResponds(instance, sel)) { completion(NO); return; }
-
-  IMP imp = [instance methodForSelector:sel];
-  if (!imp) { completion(NO); return; }
-
-  void (*func)(id, SEL, id, id) = (void (*)(id, SEL, id, id))imp;
-  func(instance, sel, list, completion);
-}
-
-/// Sets push token with provider on Swift module.
 static void CallSetPushToken(id instance, NSString *provider, NSString * _Nullable token) {
   if (!instance) return;
 
@@ -245,7 +166,6 @@ static void CallSetPushToken(id instance, NSString *provider, NSString * _Nullab
 
 #pragma mark - Push subscription calls
 
-/// Invokes subscription-related methods on Swift module.
 static void CallPushSubscription(id instance,
                                  NSString *selectorName,
                                  NSNumber *sync,
@@ -268,9 +188,8 @@ static void CallPushSubscription(id instance,
   func(instance, sel, sync, profileFields, customFields, cats, replace, skipTriggers);
 }
 
-#pragma mark - Mobile Event calls
+#pragma mark - Mobile Event calls (with subscription param)
 
-///Sends mobile event to Swift module (includes `utm`).
 static void CallMobileEvent(id instance,
                             NSString *sid,
                             NSString *eventName,
@@ -279,24 +198,24 @@ static void CallMobileEvent(id instance,
                             NSDictionary * _Nullable matching,
                             NSString * _Nullable matchingType,
                             NSDictionary * _Nullable profileFields,
+                            NSDictionary * _Nullable subscription,
                             NSDictionary * _Nullable utm) {
   if (!instance) return;
 
-  SEL sel = SdkSel(@"mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:utm:");
+  SEL sel = SdkSel(@"mobileEvent:eventName:sendMessageId:payload:matching:matchingType:profileFields:subscription:utm:");
   if (!SdkResponds(instance, sel)) return;
 
   IMP imp = [instance methodForSelector:sel];
   if (!imp) return;
 
-  void (*func)(id, SEL, id, id, id, id, id, id, id, id) =
-      (void (*)(id, SEL, id, id, id, id, id, id, id, id))imp;
+  void (*func)(id, SEL, id, id, id, id, id, id, id, id, id) =
+      (void (*)(id, SEL, id, id, id, id, id, id, id, id, id))imp;
 
-  func(instance, sel, sid, eventName, sendMessageId, payload, matching, matchingType, profileFields, utm);
+  func(instance, sel, sid, eventName, sendMessageId, payload, matching, matchingType, profileFields, subscription, utm);
 }
 
 #pragma mark - Promise helpers
 
-/// Calls a Swift method with signature (resolver, rejecter).
 static void CallPromise0Args(id instance,
                              NSString *selectorName,
                              RCTPromiseResolveBlock resolve,
@@ -314,7 +233,6 @@ static void CallPromise0Args(id instance,
     return;
   }
 
-  // React Native expects promise calls on main thread.
   if (![NSThread isMainThread]) {
     dispatch_async(dispatch_get_main_queue(), ^{
       CallPromise0Args(instance, selectorName, resolve, reject);
@@ -324,7 +242,6 @@ static void CallPromise0Args(id instance,
 
   IMP imp = [instance methodForSelector:sel];
   if (!imp) {
-    // Fallback for cases where methodForSelector returns NULL in mixed ObjC/Swift builds.
     NSMethodSignature *sig = [instance methodSignatureForSelector:sel];
     if (!sig) {
       NSError *err = [NSError errorWithDomain:@"Sdk" code:20 userInfo:@{NSLocalizedDescriptionKey:@"No signature"}];
@@ -349,7 +266,6 @@ static void CallPromise0Args(id instance,
   func(instance, sel, resolve, reject);
 }
 
-/// Calls a Swift method with signature (String?, resolver, rejecter).
 static void CallPromise1StringArg(id instance,
                                   NSString *selectorName,
                                   NSString * _Nullable arg,
@@ -368,7 +284,6 @@ static void CallPromise1StringArg(id instance,
     return;
   }
 
-  // React Native expects promise calls on main thread.
   if (![NSThread isMainThread]) {
     NSString *a = arg;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -407,7 +322,6 @@ static void CallPromise1StringArg(id instance,
 
 #pragma mark - Initialize / Clear
 
-/// Calls Swift initializer selector on the main thread.
 static void CallInitializeBySelector(id instance,
                                      SEL sel,
                                      NSDictionary *config,
@@ -449,7 +363,6 @@ static void CallInitializeBySelector(id instance,
   func(instance, sel, safeCfg, resolve, reject);
 }
 
-/// Initializes Swift module with config.
 static void CallInitialize(id instance,
                            NSDictionary *config,
                            RCTPromiseResolveBlock resolve,
@@ -470,7 +383,6 @@ static void CallInitialize(id instance,
   CallInitializeBySelector(instance, sel, config, resolve, reject);
 }
 
-/// Clears SDK state in Swift module.
 static void CallClear(id instance,
                       RCTPromiseResolveBlock resolve,
                       RCTPromiseRejectBlock reject) {
@@ -487,7 +399,6 @@ struct SdkIsStdOptional : std::false_type {};
 template <typename T>
 struct SdkIsStdOptional<std::optional<T>> : std::true_type {};
 
-/// Converts NSString* / optional NSString* to NSString* or nil.
 template <typename T>
 static NSString *SdkGetStringOrNil(const T &v) {
   using D = std::decay_t<T>;
@@ -500,7 +411,6 @@ static NSString *SdkGetStringOrNil(const T &v) {
   }
 }
 
-/// Converts bool / optional bool to NSNumber* or nil.
 template <typename T>
 static NSNumber *SdkGetBoolNumberOrNil(const T &v) {
   using D = std::decay_t<T>;
@@ -515,7 +425,6 @@ static NSNumber *SdkGetBoolNumberOrNil(const T &v) {
 
 #import <limits.h>
 
-/// Converts LazyVector<NSString*> to NSArray (capped to INT_MAX).
 static NSArray *SdkLazyVectorToNSArray(const facebook::react::LazyVector<NSString *> &vec) {
   const size_t n = vec.size();
   const size_t capped = (n > (size_t)INT_MAX) ? (size_t)INT_MAX : n;
@@ -529,7 +438,6 @@ static NSArray *SdkLazyVectorToNSArray(const facebook::react::LazyVector<NSStrin
   return arr;
 }
 
-/// Converts LazyVector / optional LazyVector to NSArray* or nil.
 template <typename T>
 static NSArray *SdkGetStringArrayOrNil(const T &v) {
   using D = std::decay_t<T>;
@@ -542,7 +450,6 @@ static NSArray *SdkGetStringArrayOrNil(const T &v) {
   }
 }
 
-/// Converts appInfo struct to NSDictionary* or nil.
 template <typename T>
 static NSDictionary *SdkGetAppInfoDictOrNil(const T &v) {
   using D = std::decay_t<T>;
@@ -567,7 +474,6 @@ static NSDictionary *SdkGetAppInfoDictOrNil(const T &v) {
   }
 }
 
-/// Converts typed RN config to NSDictionary for Swift module.
 static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::AltcraftConfig &cfg) {
   NSString *apiUrl = cfg.apiUrl();
   NSString *rToken = SdkGetStringOrNil(cfg.rToken());
@@ -584,6 +490,35 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   return dict;
 }
 
+#pragma mark - UTM typed (New Arch) -> NSDictionary
+
+static inline NSString *SdkNonEmptyOrNil(NSString *s) {
+  if (!s) return nil;
+  return (s.length > 0) ? s : nil;
+}
+
+static NSDictionary * _Nullable SdkConvertUTMToNSDictionary(JS::NativeSdk::UTM &utm) {
+  NSString *campaign = SdkNonEmptyOrNil(utm.campaign());
+  NSString *content  = SdkNonEmptyOrNil(utm.content());
+  NSString *keyword  = SdkNonEmptyOrNil(utm.keyword());
+  NSString *medium   = SdkNonEmptyOrNil(utm.medium());
+  NSString *source   = SdkNonEmptyOrNil(utm.source());
+  NSString *temp     = SdkNonEmptyOrNil(utm.temp());
+
+  if (!campaign && !content && !keyword && !medium && !source && !temp) {
+    return nil;
+  }
+
+  return @{
+    @"campaign": campaign ?: (id)kCFNull,
+    @"content":  content  ?: (id)kCFNull,
+    @"keyword":  keyword  ?: (id)kCFNull,
+    @"medium":   medium   ?: (id)kCFNull,
+    @"source":   source   ?: (id)kCFNull,
+    @"temp":     temp     ?: (id)kCFNull,
+  };
+}
+
 #endif  // RCT_NEW_ARCH_ENABLED
 
 #pragma mark - Module implementation
@@ -591,7 +526,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 @implementation Sdk
 
 #ifdef RCT_NEW_ARCH_ENABLED
-/// Returns TurboModule instance for New Architecture.
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
     (const facebook::react::ObjCTurboModule::InitParams &)params
 {
@@ -599,11 +533,9 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 }
 #endif  // RCT_NEW_ARCH_ENABLED
 
-/// React Native module name.
 + (NSString *)moduleName { return @"Sdk"; }
 
 #ifdef RCT_NEW_ARCH_ENABLED
-/// Initializes SDK using typed config (New Architecture).
 - (void)initialize:(JS::NativeSdk::AltcraftConfig &)config
            resolve:(RCTPromiseResolveBlock)resolve
             reject:(RCTPromiseRejectBlock)reject
@@ -616,15 +548,11 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 }
 #endif  // RCT_NEW_ARCH_ENABLED
 
-/// Required by RN event emitter API (no-op).
 - (void)addListener:(NSString *)eventName { (void)eventName; }
-
-/// Required by RN event emitter API (no-op).
 - (void)removeListeners:(double)count { (void)count; }
 
-#pragma mark - Events API (Swift activates emitting; ObjC++ does NOT forward events)
+#pragma mark - Events API (Swift emits; ObjC++ only forwards method calls)
 
-/// Subscribes to SDK events in Swift layer (idempotent).
 - (void)subscribeToEvents
 {
   id module = SdkAppModuleSharedInstance();
@@ -640,7 +568,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   func(module, sel);
 }
 
-/// Unsubscribes from SDK events in Swift layer (idempotent).
 - (void)unsubscribeFromEvent
 {
   id module = SdkAppModuleSharedInstance();
@@ -656,65 +583,8 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   func(module, sel);
 }
 
-#pragma mark - Common (JWT / AppGroup)
-
-/// Sets JWT used by SDK requests.
-- (void)setJwt:(NSString * _Nullable)token {
-  id module = SdkAppModuleSharedInstance();
-  CallSetToken(module, @"setJWT:", token);
-}
-
-/// Sets App Group name for shared storage.
-- (void)setAppGroup:(NSString * _Nullable)groupName
-            resolve:(RCTPromiseResolveBlock)resolve
-             reject:(RCTPromiseRejectBlock)reject
-{
-  id module = SdkAppModuleSharedInstance();
-  if (!module) {
-    NSError *err = [NSError errorWithDomain:@"Sdk" code:1 userInfo:@{NSLocalizedDescriptionKey:@"SdkAppModule not found"}];
-    reject(@"SWIFT_MODULE_NOT_FOUND", @"SdkAppModule class not found", err);
-    return;
-  }
-
-  CallSetAppGroup(module, groupName);
-  resolve((id)kCFNull);
-}
-
-#pragma mark - Platform-specific tokens
-
-/// Android-only API stub (no-op on iOS).
-- (void)setAndroidFcmToken:(NSString * _Nullable)token { (void)token; }
-
-/// Android-only API stub (no-op on iOS).
-- (void)setAndroidHmsToken:(NSString * _Nullable)token { (void)token; }
-
-/// Sets iOS FCM token in Swift module.
-- (void)setIosFcmToken:(NSString * _Nullable)token {
-  id module = SdkAppModuleSharedInstance();
-  EnsureProvidersInstalled(module);
-  CallSetToken(module, @"setFCM:", token);
-}
-
-/// Sets iOS HMS token in Swift module (if used).
-- (void)setIosHmsToken:(NSString * _Nullable)token {
-  id module = SdkAppModuleSharedInstance();
-  EnsureProvidersInstalled(module);
-  CallSetToken(module, @"setHMS:", token);
-}
-
-/// Sets APNs token in Swift module.
-- (void)setApnsToken:(NSString * _Nullable)token {
-  id module = SdkAppModuleSharedInstance();
-  EnsureProvidersInstalled(module);
-  CallSetToken(module, @"setAPNS:", token);
-}
-
-/// RuStore-only API stub (no-op on iOS).
-- (void)setRustoreToken:(NSString * _Nullable)token { (void)token; }
-
 #pragma mark - Subscription (void)
 
-/// Subscribes device for push notifications.
 - (void)pushSubscribe:(NSNumber *)sync
         profileFields:(NSDictionary *)profileFields
          customFields:(NSDictionary *)customFields
@@ -735,7 +605,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
                        (NSNumber *)SdkNilIfNSNull(skipTriggers));
 }
 
-/// Suspends push subscription.
 - (void)pushSuspend:(NSNumber *)sync
       profileFields:(NSDictionary *)profileFields
        customFields:(NSDictionary *)customFields
@@ -756,7 +625,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
                        (NSNumber *)SdkNilIfNSNull(skipTriggers));
 }
 
-/// Unsubscribes device from push notifications.
 - (void)pushUnSubscribe:(NSNumber *)sync
           profileFields:(NSDictionary *)profileFields
            customFields:(NSDictionary *)customFields
@@ -777,9 +645,10 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
                        (NSNumber *)SdkNilIfNSNull(skipTriggers));
 }
 
-#pragma mark - MobileEvent (void)
+#pragma mark - MobileEvent (void) with subscription
 
-/// Sends a custom mobile event to backend (now includes `utm`).
+#ifdef RCT_NEW_ARCH_ENABLED
+
 - (void)mobileEvent:(NSString *)sid
           eventName:(NSString *)eventName
        sendMessageId:(NSString * _Nullable)sendMessageId
@@ -787,6 +656,36 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
            matching:(NSDictionary * _Nullable)matching
        matchingType:(NSString * _Nullable)matchingType
       profileFields:(NSDictionary * _Nullable)profileFields
+       subscription:(NSDictionary * _Nullable)subscription
+                utm:(JS::NativeSdk::UTM &)utm
+{
+  id module = SdkAppModuleSharedInstance();
+  EnsureProvidersInstalled(module);
+
+  NSDictionary *utmDict = SdkConvertUTMToNSDictionary(utm);
+
+  CallMobileEvent(module,
+                  (NSString *)SdkNilIfNSNull(sid),
+                  (NSString *)SdkNilIfNSNull(eventName),
+                  (NSString *)SdkNilIfNSNull(sendMessageId),
+                  (NSDictionary *)SdkNilIfNSNull(payload),
+                  (NSDictionary *)SdkNilIfNSNull(matching),
+                  (NSString *)SdkNilIfNSNull(matchingType),
+                  (NSDictionary *)SdkNilIfNSNull(profileFields),
+                  (NSDictionary *)SdkNilIfNSNull(subscription),
+                  (NSDictionary *)SdkNilIfNSNull(utmDict));
+}
+
+#else  // OLD ARCH
+
+- (void)mobileEvent:(NSString *)sid
+          eventName:(NSString *)eventName
+       sendMessageId:(NSString * _Nullable)sendMessageId
+            payload:(NSDictionary * _Nullable)payload
+           matching:(NSDictionary * _Nullable)matching
+       matchingType:(NSString * _Nullable)matchingType
+      profileFields:(NSDictionary * _Nullable)profileFields
+       subscription:(NSDictionary * _Nullable)subscription
                 utm:(NSDictionary * _Nullable)utm
 {
   id module = SdkAppModuleSharedInstance();
@@ -800,12 +699,14 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
                   (NSDictionary *)SdkNilIfNSNull(matching),
                   (NSString *)SdkNilIfNSNull(matchingType),
                   (NSDictionary *)SdkNilIfNSNull(profileFields),
+                  (NSDictionary *)SdkNilIfNSNull(subscription),
                   (NSDictionary *)SdkNilIfNSNull(utm));
 }
 
+#endif
+
 #pragma mark - Promises
 
-/// Unsuspends current push subscription.
 - (void)unSuspendPushSubscription:(RCTPromiseResolveBlock)resolve
                            reject:(RCTPromiseRejectBlock)reject
 {
@@ -814,7 +715,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   CallPromise0Args(module, @"unSuspendPushSubscriptionWithResolver:rejecter:", resolve, reject);
 }
 
-/// Returns status of latest subscription attempt.
 - (void)getStatusOfLatestSubscription:(RCTPromiseResolveBlock)resolve
                                reject:(RCTPromiseRejectBlock)reject
 {
@@ -823,7 +723,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   CallPromise0Args(module, @"getStatusOfLatestSubscriptionWithResolver:rejecter:", resolve, reject);
 }
 
-/// Returns current subscription status.
 - (void)getStatusForCurrentSubscription:(RCTPromiseResolveBlock)resolve
                                  reject:(RCTPromiseRejectBlock)reject
 {
@@ -832,7 +731,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   CallPromise0Args(module, @"getStatusForCurrentSubscriptionWithResolver:rejecter:", resolve, reject);
 }
 
-/// Returns status of latest subscription for a specific provider.
 - (void)getStatusOfLatestSubscriptionForProvider:(NSString * _Nullable)provider
                                          resolve:(RCTPromiseResolveBlock)resolve
                                           reject:(RCTPromiseRejectBlock)reject
@@ -847,7 +745,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
                         reject);
 }
 
-/// Clears SDK state (tokens, cached values, etc).
 - (void)clear:(RCTPromiseResolveBlock)resolve
        reject:(RCTPromiseRejectBlock)reject
 {
@@ -856,7 +753,8 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   CallClear(module, resolve, reject);
 }
 
-/// Returns current push token info {provider, token}.
+#pragma mark - Push token API (ONLY getPushToken / setPushToken)
+
 - (void)getPushToken:(RCTPromiseResolveBlock)resolve
               reject:(RCTPromiseRejectBlock)reject
 {
@@ -889,72 +787,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   });
 }
 
-/// Deletes device token for provider.
-- (void)deleteDeviceToken:(NSString * _Nullable)provider
-                  resolve:(RCTPromiseResolveBlock)resolve
-                   reject:(RCTPromiseRejectBlock)reject
-{
-  id module = SdkAppModuleSharedInstance();
-  if (!module) {
-    NSError *err = [NSError errorWithDomain:@"Sdk" code:1 userInfo:@{NSLocalizedDescriptionKey:@"SdkAppModule not found"}];
-    reject(@"SWIFT_MODULE_NOT_FOUND", @"SdkAppModule class not found", err);
-    return;
-  }
-
-  EnsureProvidersInstalled(module);
-
-  CallDeleteDeviceToken(module, provider, ^(BOOL ok) {
-    if (ok) resolve((id)kCFNull);
-    else {
-      NSError *err = [NSError errorWithDomain:@"Sdk" code:2 userInfo:@{NSLocalizedDescriptionKey:@"Unknown provider"}];
-      reject(@"INVALID_PROVIDER", @"Unknown provider for deleteDeviceToken", err);
-    }
-  });
-}
-
-/// Forces push token update.
-- (void)forcedTokenUpdate:(RCTPromiseResolveBlock)resolve
-                   reject:(RCTPromiseRejectBlock)reject
-{
-  id module = SdkAppModuleSharedInstance();
-  if (!module) {
-    NSError *err = [NSError errorWithDomain:@"Sdk" code:1 userInfo:@{NSLocalizedDescriptionKey:@"SdkAppModule not found"}];
-    reject(@"SWIFT_MODULE_NOT_FOUND", @"SdkAppModule class not found", err);
-    return;
-  }
-
-  EnsureProvidersInstalled(module);
-
-  CallForcedTokenUpdate(module, ^{
-    resolve((id)kCFNull);
-  });
-}
-
-/// Updates provider priority list used by SDK.
-- (void)changePushProviderPriorityList:(NSArray * _Nullable)priorityList
-                               resolve:(RCTPromiseResolveBlock)resolve
-                                reject:(RCTPromiseRejectBlock)reject
-{
-  id module = SdkAppModuleSharedInstance();
-  if (!module) {
-    NSError *err = [NSError errorWithDomain:@"Sdk" code:1 userInfo:@{NSLocalizedDescriptionKey:@"SdkAppModule not found"}];
-    reject(@"SWIFT_MODULE_NOT_FOUND", @"SdkAppModule class not found", err);
-    return;
-  }
-
-  EnsureProvidersInstalled(module);
-
-  NSArray *list = priorityList ?: @[];
-  CallChangeProviderPriorityList(module, list, ^(BOOL ok) {
-    if (ok) resolve((id)kCFNull);
-    else {
-      NSError *err = [NSError errorWithDomain:@"Sdk" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Change priority failed"}];
-      reject(@"CHANGE_PRIORITY_FAILED", @"Failed to change provider priority list", err);
-    }
-  });
-}
-
-/// Sets push token for explicit provider (advanced usage).
 - (void)setPushToken:(NSString *)provider
                token:(NSString * _Nullable)token
              resolve:(RCTPromiseResolveBlock)resolve
@@ -981,8 +813,6 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 
 #pragma mark - UserDefaults
 
-/// We forward to Swift `SdkModule.setUserDefaultsValueWithSuiteName:key:value:`
-/// so App Group logic is centralized in Swift and works consistently.
 - (void)setUserDefaultsValue:(NSString * _Nullable)suiteName
                          key:(NSString *)key
                        value:(NSString * _Nullable)value
@@ -992,15 +822,10 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
 
   NSString *sn = (NSString *)SdkNilIfNSNull(suiteName);
   NSString *k  = (NSString *)SdkNilIfNSNull(key);
-  id v         = SdkNilIfNSNull(value); // value already NSString* or nil
+  id v         = SdkNilIfNSNull(value);
 
-  if (!module) {
-    return;
-  }
-
-  if (!k || k.length == 0) {
-    return;
-  }
+  if (!module) return;
+  if (!k || k.length == 0) return;
 
   if (![NSThread isMainThread]) {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -1012,43 +837,30 @@ static NSDictionary *SdkConvertAltcraftConfigToNSDictionary(JS::NativeSdk::Altcr
   CallSetUserDefaultsValue(module, sn, k, v);
 }
 
-#pragma mark - iOS-only stubs (not implemented)
+#pragma mark - iOS-only stubs (kept if present in spec / facade)
 
-/// iOS stub: delivery tracking is handled by server/other platforms.
 - (void)deliveryEvent:(NSDictionary * _Nullable)message
            messageUID:(NSString * _Nullable)messageUID
 {
   (void)message;
   (void)messageUID;
-  // Intentionally not implemented on iOS.
 }
 
-/// iOS stub: open tracking is handled by OS / deep-link flow.
 - (void)openEvent:(NSDictionary * _Nullable)message
        messageUID:(NSString * _Nullable)messageUID
 {
   (void)message;
   (void)messageUID;
-  // Intentionally not implemented on iOS.
 }
 
-/// iOS stub: retry control is managed in Swift layer / system scheduling.
-- (void)unlockInitOperationsInThisSession
-{
-  // Intentionally not implemented on iOS.
-}
-
-/// iOS stub: permission prompt should be initiated by the host app UI.
 - (void)requestNotificationPermission
 {
-  // Intentionally not implemented on iOS.
 }
 
-/// iOS stub: push handling is done via AppDelegate / UNUserNotificationCenter callbacks.
 - (void)takePush:(NSDictionary * _Nullable)message
 {
   (void)message;
-  // Intentionally not implemented on iOS.
 }
 
 @end
+
