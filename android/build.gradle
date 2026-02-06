@@ -10,11 +10,9 @@ buildscript {
 
   dependencies {
     classpath "com.android.tools.build:gradle:8.7.2"
-    // noinspection DifferentKotlinGradleVersion
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${getExtOrDefault('kotlinVersion')}"
   }
 }
-
 
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
@@ -72,7 +70,8 @@ repositories {
 def kotlin_version = getExtOrDefault("kotlinVersion")
 
 dependencies {
+  api "com.altcraft:android-sdk:1.0.2"
   implementation "com.facebook.react:react-android"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-  implementation "com.altcraft:android-sdk:0.0.4"
+  implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3"
 }

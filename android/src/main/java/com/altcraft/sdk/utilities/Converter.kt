@@ -4,6 +4,13 @@ import com.altcraft.sdk.data.DataClasses
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.ReadableType
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import android.widget.Toast
 
 object Converter {
 
@@ -157,6 +164,163 @@ object Converter {
             asLong.toInt()
         } else {
             asLong
+        }
+    }
+
+        private val jsonKx = Json { ignoreUnknownKeys = true }
+
+    /**
+     * RN subscription map comes from JS as Record<string,string> (string-only).
+     * So: resource_id / priority may arrive as strings.
+     */
+    fun toSubscriptionOrNull(subscriptionMap: ReadableMap?): DataClasses.Subscription? {
+        if (subscriptionMap == null) return null
+
+        return try {
+            val type = subscriptionMap.getString("type")?.trim().orEmpty()
+            if (type.isEmpty()) return null
+
+            val resourceId = subscriptionMap.getString("resource_id")
+                ?.trim()
+                ?.toIntOrNull()
+                ?: return null
+
+            val status = subscriptionMap.getString("status")
+
+            val priority: Int? =
+                subscriptionMap.getString("priority")
+                    ?.trim()
+                    ?.toIntOrNull()
+
+            val customFields: Map<String, Any?>? =
+                subscriptionMap.getString("custom_fields")
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { parseJsonToMap(it) }
+
+            val cats: List<String>? =
+                subscriptionMap.getString("cats")
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { parseJsonToStringList(it) }
+
+            when (type) {
+                "email" -> {
+                    val email = subscriptionMap.getString("email") ?: return null
+                    DataClasses.EmailSubscription(
+                        resourceId = resourceId,
+                        email = email,
+                        status = status,
+                        priority = priority,
+                        customFields = customFields,
+                        cats = cats
+                    )
+                }
+
+                "sms" -> {
+                    val phone = subscriptionMap.getString("phone") ?: return null
+                    DataClasses.SmsSubscription(
+                        resourceId = resourceId,
+                        phone = phone,
+                        status = status,
+                        priority = priority,
+                        customFields = customFields,
+                        cats = cats
+                    )
+                }
+
+                "push" -> {
+                    val provider = subscriptionMap.getString("provider") ?: return null
+                    val subscriptionId = subscriptionMap.getString("subscription_id") ?: return null
+                    DataClasses.PushSubscription(
+                        resourceId = resourceId,
+                        provider = provider,
+                        subscriptionId = subscriptionId,
+                        status = status,
+                        priority = priority,
+                        customFields = customFields,
+                        cats = cats
+                    )
+                }
+
+                "cc_data" -> {
+                    val channel = subscriptionMap.getString("channel") ?: return null
+                    val ccDataJson = subscriptionMap.getString("cc_data") ?: "{}"
+                    val ccData = parseJsonObjectToKotlinx(ccDataJson)
+                    DataClasses.CcDataSubscription(
+                        resourceId = resourceId,
+                        channel = channel,
+                        ccData = ccData,
+                        status = status,
+                        priority = priority,
+                        customFields = customFields,
+                        cats = cats
+                    )
+                }
+
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // ---------------- JSON helpers ----------------
+
+    private fun parseJsonToMap(jsonString: String): Map<String, Any?> {
+        val result = mutableMapOf<String, Any?>()
+        try {
+            val jsonObject = JSONObject(jsonString)
+            val keys = jsonObject.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = jsonObject.get(key)
+                result[key] = when (value) {
+                    is JSONObject -> parseJsonToMap(value.toString())
+                    is JSONArray -> parseJsonArrayToList(value)
+                    JSONObject.NULL -> null
+                    else -> value
+                }
+            }
+        } catch (_: JSONException) {
+            // return empty map on parse error
+        }
+        return result
+    }
+
+    private fun parseJsonToStringList(jsonString: String): List<String> {
+        val result = mutableListOf<String>()
+        try {
+            val jsonArray = JSONArray(jsonString)
+            for (i in 0 until jsonArray.length()) {
+                val item = jsonArray.optString(i, null)
+                if (item != null) result.add(item)
+            }
+        } catch (_: JSONException) {
+            // return empty list on parse error
+        }
+        return result
+    }
+
+    private fun parseJsonArrayToList(jsonArray: JSONArray): List<Any?> {
+        val result = mutableListOf<Any?>()
+        for (i in 0 until jsonArray.length()) {
+            val value = jsonArray.get(i)
+            result.add(
+                when (value) {
+                    is JSONObject -> parseJsonToMap(value.toString())
+                    is JSONArray -> parseJsonArrayToList(value)
+                    JSONObject.NULL -> null
+                    else -> value
+                }
+            )
+        }
+        return result
+    }
+
+    private fun parseJsonObjectToKotlinx(jsonString: String): JsonObject {
+        return try {
+            jsonKx.parseToJsonElement(jsonString).jsonObject
+        } catch (_: Exception) {
+            JsonObject(emptyMap())
         }
     }
 }

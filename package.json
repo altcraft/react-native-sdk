@@ -1,6 +1,6 @@
 {
-  "name": "@altcraft/react-native-sdk",
-  "version": "0.0.2",
+  "name": "react-native-sdk",
+  "version": "0.0.3",
   "description": "Altcraft Platform SDK for React Native",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
