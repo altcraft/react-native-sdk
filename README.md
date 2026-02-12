@@ -3,7 +3,6 @@
 ![Altcraft SDK Logo](https://guides.altcraft.com/img/logo.svg)
 
 [![npm version](https://img.shields.io/npm/v/react-native-sdk?style=flat-square)](https://www.npmjs.com/package/@altcraft/react-native-sdk)
-[![npm downloads](https://img.shields.io/npm/dm/react-native-sdk?style=flat-square)](https://www.npmjs.com/package/@altcraft/react-native-sdk)
 [![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue?style=flat-square)](#)
 [![Platforms](https://img.shields.io/badge/Platforms-Android%20%7C%20iOS-green?style=flat-square)](#)
 [![Push Providers](https://img.shields.io/badge/Push-APNs%20%7C%20FCM%20%7C%20HMS%20%7C%20RuStore-orange?style=flat-square)](#)
