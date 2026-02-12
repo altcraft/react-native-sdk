@@ -15,3 +15,5 @@ Copyright © 2024 Altcraft LLC. All rights reserved.
 6. **LIMITATION OF LIABILITY**: In no event shall the copyright holder be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of this Software, even if advised of the possibility of such damage.
 
 7. **DISTRIBUTION**: When distributing the Software, you must provide all recipients with a copy of this license agreement.
+
+USE OF THE SOFTWARE INDICATES YOUR ACCEPTANCE OF THE TERMS OF THIS LICENSE AGREEMENT.
