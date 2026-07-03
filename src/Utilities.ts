@@ -1,7 +1,70 @@
 import type { Subscription } from './NativeSdk';
 
-export class Utilities {
+/** Supported action types for profile field manipulation. */
+export type ActionFieldType =
+  | 'set'
+  | 'unset'
+  | 'incr'
+  | 'add'
+  | 'delete'
+  | 'upsert';
 
+/**
+ * Builder for structured profile field actions.
+ *
+ * Produces a map entry compatible with the native SDK's ActionFieldBuilder.
+ * The resulting map is intended to be merged into `profileFields` before
+ * passing to `pushSubscribe`, `updateProfileFields`, or similar APIs.
+ */
+export class ActionFieldBuilder {
+  private key: string;
+
+  constructor(key: string) {
+    this.key = key;
+  }
+
+  /** Set field to a specific value. */
+  set(value: unknown): Record<string, unknown> {
+    return { [this.key]: { action: 'set', value } };
+  }
+
+  /** Unset (remove) a field value. */
+  unset(value: unknown): Record<string, unknown> {
+    return { [this.key]: { action: 'unset', value } };
+  }
+
+  /** Increment a numeric field by the given value. */
+  incr(value: unknown): Record<string, unknown> {
+    return { [this.key]: { action: 'incr', value } };
+  }
+
+  /** Add a value to a set/array field. */
+  add(value: unknown): Record<string, unknown> {
+    return { [this.key]: { action: 'add', value } };
+  }
+
+  /** Delete a value from a set/array field. */
+  delete(value: unknown): Record<string, unknown> {
+    return { [this.key]: { action: 'delete', value } };
+  }
+
+  /** Upsert: set if missing, update if exists. */
+  upsert(value: unknown): Record<string, unknown> {
+    return { [this.key]: { action: 'upsert', value } };
+  }
+}
+
+/**
+ * Creates an ActionFieldBuilder for the given field key.
+ *
+ * @param key Profile field key to operate on.
+ * @returns Builder instance with action methods.
+ */
+export function actionField(key: string): ActionFieldBuilder {
+  return new ActionFieldBuilder(key);
+}
+
+export class Utilities {
   /** Converts a JS object to { [key: string]: string }
    *  for the RN bridge; drops null/undefined. */
   static toNativeStringMap(
@@ -70,7 +133,8 @@ export class Utilities {
     };
 
     if (subscription.status != null) result.status = subscription.status;
-    if (subscription.priority != null) result.priority = String(subscription.priority);
+    if (subscription.priority != null)
+      result.priority = String(subscription.priority);
 
     if (subscription.custom_fields != null) {
       try {

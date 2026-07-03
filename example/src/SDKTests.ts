@@ -1,46 +1,30 @@
-// src/SDKTests.ts
-
 import { Platform } from 'react-native';
 import AltcraftSDK, {
-  type EmailSubscription,
-} from 'react-native-sdk';
+  type Subscription,
+  type CategoryData,
+} from '@altcraft/react-native-sdk';
+import {
+  Store,
+  type SubscribeSettings,
+  type SdkEventItem,
+  type ConfigData,
+} from './Store';
 
-const API_URL = 'your.api.url';
-const JWT_TOKEN: string | null = 'your JWT';
-const APP_GROUP_SUITE = 'group.your.id';
-const MOBILE_EVENT_SID = 'your_sid';
+const JWT_KEY = 'JWT_KEY';
+const APP_GROUP_SUITE = 'group.altcraft.react.native.example';
+const MOBILE_EVENT_SID = '';
+const DEFAULT_JWT = '';
+const DEFAULT_API_URL = '';
 
-type AltcraftConfigFromSdk = Parameters<typeof AltcraftSDK.initialize>[0];
+export const USER_CONFIG = {
+  apiUrl: DEFAULT_API_URL,
+  mobileEventSid: MOBILE_EVENT_SID,
+  defaultJwt: DEFAULT_JWT,
+  jwtKey: JWT_KEY,
+  appGroupSuite: APP_GROUP_SUITE,
+};
 
-const iosConfig = {
-  apiUrl: API_URL,
-  rToken: null,
-  appInfo: {
-    appID: 'firebase-app-id-ios',
-    appIID: 'firebase-instance-id-ios',
-    appVer: '1.0.0',
-  },
-  providerPriorityList: ['ios-firebase'],
-  enableLogging: true,
-} satisfies AltcraftConfigFromSdk;
-
-const androidConfig = {
-  apiUrl: API_URL,
-  rToken: null,
-  appInfo: {
-    appID: 'firebase-app-id-android',
-    appIID: 'firebase-instance-id-android',
-    appVer: '1.0.0',
-  },
-  providerPriorityList: ['android-firebase'],
-  enableLogging: true,
-  android_icon: null,
-  android_usingService: false,
-  android_serviceMessage: 'Altcraft foreground service is running',
-  android_pushReceiverModules: null,
-  android_pushChannelName: 'Altcraft notifications',
-  android_pushChannelDescription: 'Messages from Altcraft platform',
-} satisfies AltcraftConfigFromSdk;
+export type { SubscribeSettings, SdkEventItem, ConfigData, CategoryData };
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -49,160 +33,184 @@ async function sleep(ms: number): Promise<void> {
 async function waitForIosApnsToken(maxAttempts: number): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const token = await AltcraftSDK.getPushToken();
-    const provider = token?.provider ?? null;
-    const value = token?.token ?? null;
-
-    if (provider && value && String(value).length > 0) return;
+    if (token?.provider && token?.token && String(token.token).length > 0)
+      return;
     await sleep(400);
   }
 }
 
-export type InitializationSDKResult = {
-  platform: 'ios' | 'android' | 'other';
-};
+export async function initializationSDK(config: ConfigData): Promise<void> {
+  const jwtAnon = (await Store.getJwtAnon()) || USER_CONFIG.defaultJwt;
+  const jwtReg = (await Store.getJwtReg()) || USER_CONFIG.defaultJwt;
+  const jwt = (await Store.getAuthStatus()) ? jwtReg : jwtAnon;
+  AltcraftSDK.setUserDefaultsValue(
+    USER_CONFIG.appGroupSuite,
+    USER_CONFIG.jwtKey,
+    jwt
+  );
 
-export type SdkEventForTests = {
-  function: string;
-  code: number | null;
-  message: string;
-  type: 'event' | 'error' | 'retryError';
-  value?: Record<string, unknown> | unknown[] | string | number | boolean | null;
-};
-
-let lastSdkEvent: SdkEventForTests | null = null;
-
-/**
- * Subscribes to SDK events and stores the latest received payload.
- * The handler is invoked on each incoming event.
- */
-export function subscribeToSdkEventsForTests(
-  handler?: (event: SdkEventForTests) => void
-): void {
-  AltcraftSDK.subscribeToEvents((event: any) => {
-    const e = (event ?? null) as SdkEventForTests | null;
-    if (!e) return;
-
-    lastSdkEvent = e;
-
-    try {
-      handler?.(e);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[AltcraftSDK][Event] handler error:', err);
-    }
-  });
-}
-
-/** Unsubscribes from native SDK events. */
-export function unsubscribeFromSdkEventsForTests(): void {
-  AltcraftSDK.unsubscribeFromEvent();
-}
-
-/** Returns the last received SDK event. */
-export function getLastSdkEventForTests(): SdkEventForTests | null {
-  return lastSdkEvent;
-}
-
-/** Returns the code of the last received SDK event. */
-export function getLastSdkEventCodeForTests(): number | null {
-  return lastSdkEvent?.code ?? null;
-}
-
-/**
- * Initializes SDK and sets auth prerequisites:
- * - setJwt
- * - (iOS) store JWT to UserDefaults App Group
- * - initialize with platform config
- */
-export async function initializationSDK(): Promise<InitializationSDKResult> {
-  AltcraftSDK.setUserDefaultsValue(APP_GROUP_SUITE, 'JWT_KEY', JWT_TOKEN);
-
-  // iOS
   if (Platform.OS === 'ios') {
-    await AltcraftSDK.initialize(iosConfig);
-    return { platform: 'ios' };
+    AltcraftSDK.setAppGroup(USER_CONFIG.appGroupSuite);
   }
 
-  // Android
+  await AltcraftSDK.initialize({
+    apiUrl: config.apiUrl,
+    rToken: config.rToken,
+    appInfo: {
+      appID: `firebase-app-id-${Platform.OS}`,
+      appIID: `firebase-instance-id-${Platform.OS}`,
+      appVer: '1.0.0',
+    },
+    providerPriorityList:
+      config.providerPriorityList.length > 0
+        ? config.providerPriorityList
+        : Platform.OS === 'ios'
+          ? ['ios-apns']
+          : ['android-firebase'],
+    enableLogging: true,
+    android_icon: null,
+    android_pushReceiverModules: null,
+    android_pushChannelName: 'Altcraft notifications',
+    android_pushChannelDescription: 'Messages from Altcraft platform',
+  });
+
   if (Platform.OS === 'android') {
-    await AltcraftSDK.initialize(androidConfig);
-
-    // Android 13+ permission flow
     AltcraftSDK.requestNotificationPermission();
-
-    return { platform: 'android' };
   }
-
-  return { platform: 'other' };
 }
 
-/**
- * Sends pushSubscribe (scenario step only).
- * IMPORTANT: assumes initializationSDK() was already executed.
- */
-export async function pushSubscribe(): Promise<void> {
+export async function doPushSubscribe(): Promise<void> {
   if (Platform.OS === 'ios') {
     await waitForIosApnsToken(25);
-
-    AltcraftSDK.pushSubscribe(
-      true,
-      { _fname: 'RN', _lname: 'IOS' },
-      null,
-      null,
-      null,
-      null
-    );
-
-    return;
   }
 
-  if (Platform.OS === 'android') {
-    AltcraftSDK.pushSubscribe(
-      true,
-      { _fname: 'RN', _lname: 'Android' },
-      null,
-      null,
-      null,
-      null
-    );
+  const settings = await Store.getSubscribeSettings();
+  AltcraftSDK.pushSubscribe(
+    settings.sync ? true : null,
+    Object.keys(settings.profileFields).length > 0
+      ? settings.profileFields
+      : null,
+    Object.keys(settings.customFields).length > 0
+      ? settings.customFields
+      : null,
+    settings.cats.length > 0 ? settings.cats : null,
+    settings.replace ? true : null,
+    settings.skipTriggers ? true : null
+  );
+}
 
-    return;
+export async function doPushSuspend(): Promise<void> {
+  const settings = await Store.getSubscribeSettings();
+  AltcraftSDK.pushSuspend(
+    settings.sync ? true : null,
+    Object.keys(settings.profileFields).length > 0
+      ? settings.profileFields
+      : null,
+    Object.keys(settings.customFields).length > 0
+      ? settings.customFields
+      : null,
+    settings.cats.length > 0 ? settings.cats : null,
+    settings.replace ? true : null,
+    settings.skipTriggers ? true : null
+  );
+}
+
+export async function doPushUnSubscribe(): Promise<void> {
+  const settings = await Store.getSubscribeSettings();
+  AltcraftSDK.pushUnSubscribe(
+    settings.sync ? true : null,
+    Object.keys(settings.profileFields).length > 0
+      ? settings.profileFields
+      : null,
+    Object.keys(settings.customFields).length > 0
+      ? settings.customFields
+      : null,
+    settings.cats.length > 0 ? settings.cats : null,
+    settings.replace ? true : null,
+    settings.skipTriggers ? true : null
+  );
+}
+
+export async function doLogin(): Promise<void> {
+  await Store.saveAuthStatus(true);
+  AltcraftSDK.unlockInitialOperationsInThisSession();
+  const res = await AltcraftSDK.unSuspendPushSubscription();
+  if (res?.httpCode === 200 && !res.response?.profile?.subscription) {
+    await doPushSubscribe();
   }
 }
 
-/**
- * Sends mobileEvent.
- */
-export async function sendMobileEvent(): Promise<void> {
-  const eventName = `rn_${Platform.OS}_mobile_event`;
+export async function doLogout(): Promise<void> {
+  await Store.saveAuthStatus(false);
+  AltcraftSDK.unlockInitialOperationsInThisSession();
+  await AltcraftSDK.unSuspendPushSubscription();
+}
 
-  // Example: an email subscription payload for the event
-  const pushSubscription: EmailSubscription = {
-    type: 'email',
-    resource_id: 1,
-    email: 'test@yandex.ru',
-  };
+export async function doGetProfileStatus(): Promise<Record<
+  string,
+  unknown
+> | null> {
+  const res = await AltcraftSDK.getStatusForCurrentSubscription();
+  if (res?.response?.profile) {
+    await Store.saveProfileData(
+      res.response.profile as Record<string, unknown>
+    );
+    return res.response.profile as Record<string, unknown>;
+  }
+  return null;
+}
 
+export async function doForcedTokenUpdate(): Promise<void> {
+  await AltcraftSDK.forcedTokenUpdate();
+}
+
+export async function doDeleteToken(provider: string): Promise<void> {
+  await AltcraftSDK.deleteDeviceToken(provider);
+}
+
+export async function doChangePriority(list: string[]): Promise<void> {
+  await AltcraftSDK.changePushProviderPriorityList(list);
+  await Store.saveProviderList(list);
+}
+
+export async function doClear(): Promise<void> {
+  await AltcraftSDK.clear();
+}
+
+export async function doSendMobileEvent(
+  eventName: string,
+  sendMessageId: string | null,
+  payload: Record<string, unknown> | null,
+  matching: Record<string, unknown> | null,
+  matchingType: string | null,
+  profileFields: Record<string, unknown> | null,
+  subscription: Subscription | null,
+  utm: Record<string, unknown> | null
+): Promise<void> {
   AltcraftSDK.mobileEvent(
-    MOBILE_EVENT_SID,
+    USER_CONFIG.mobileEventSid,
     eventName,
-    null, // sendMessageId
-    {
-      test_param: 'test_value',
-      timestamp: new Date().toISOString(),
-      platform: Platform.OS,
-      device_id: 'mob_event',
-    }, // payload
-    null, // matching
-    null, // matchingType
-    null, // profileFields
-    pushSubscription, // subscription (new option)
-    {
-      source: 'react_native_app',
-      medium: 'mobile',
-      campaign: 'sdk_test',
-      content: 'subscription_test',
-      keyword: 'mobile_event',
-    } // utm
+    sendMessageId,
+    payload,
+    matching,
+    matchingType,
+    profileFields,
+    subscription,
+    utm as any
   );
+}
+
+export async function doUpdateProfile(
+  fields: Record<string, unknown> | null,
+  skipTriggers: boolean | null
+): Promise<void> {
+  AltcraftSDK.updateProfileFields(fields, skipTriggers);
+}
+
+export function doTakePush(message: Record<string, string>): void {
+  AltcraftSDK.takePush(message);
+}
+
+export function doIsAltcraftPush(message: Record<string, string>): boolean {
+  return AltcraftSDK.isAltcraftPush(message);
 }

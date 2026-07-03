@@ -1,6 +1,6 @@
 {
   "name": "@altcraft/react-native-sdk",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "Altcraft Platform SDK for React Native",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -49,11 +49,11 @@
     "url": "git+https://github.com/altcraft/react-native-sdk.git"
   },
   "author": "Altcraft <contact@altcraft.com> (https://altcraft.com)",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "bugs": {
     "url": "https://github.com/altcraft/react-native-sdk/issues"
   },
-  "homepage": "https://github.com/altcraft/react-native-sdk#readme",
+  "homepage": "https://github.com/altcraft/react-native-sdk",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
@@ -72,7 +72,7 @@
     "prettier": "^3.0.0",
     "react": "19.1.0",
     "react-native": "0.81.1",
-    "react-native-builder-bob": "^0.40.17",
+    "react-native-builder-bob": "^0.40.16",
     "turbo": "^2.5.6",
     "typescript": "^5.9.2"
   },

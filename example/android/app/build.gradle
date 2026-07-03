@@ -1,7 +1,9 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-apply plugin: "com.google.gms.google-services"
+// Firebase config files are intentionally not included in the public example.
+// Add example/android/app/google-services.json before enabling this plugin.
+// apply plugin: "com.google.gms.google-services"
 
 react {
     autolinkLibrariesWithApp()

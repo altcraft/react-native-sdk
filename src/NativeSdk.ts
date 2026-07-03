@@ -117,8 +117,6 @@ export type AltcraftConfig = {
 
   // -------- ANDROID-ONLY --------
   android_icon?: number | null;
-  android_usingService?: boolean | null;
-  android_serviceMessage?: string | null;
   android_pushReceiverModules?: string[] | null;
   android_pushChannelName?: string | null;
   android_pushChannelDescription?: string | null;
@@ -272,6 +270,40 @@ export interface Spec extends TurboModule {
     key: string,
     value: string | null
   ): void;
+
+  // profile API
+
+  /** Updates profile fields on the server. */
+  updateProfileFields(
+    profileFields: { [key: string]: string } | null,
+    skipTriggers: boolean | null
+  ): void;
+
+  // token management
+
+  /** Forces a push token refresh (delete + re-register). */
+  forcedTokenUpdate(): Promise<void>;
+
+  /** Deletes the device token for a given provider. */
+  deleteDeviceToken(provider: string): Promise<void>;
+
+  /** Changes the push provider priority list at runtime. */
+  changePushProviderPriorityList(priorityList: string[]): Promise<void>;
+
+  // push receiver helpers
+
+  /** Checks whether a push payload belongs to Altcraft. */
+  isAltcraftPush(message: { [key: string]: string } | null): boolean;
+
+  // SDK lifecycle
+
+  /** Allows re-running initial operations in this session (Android only). */
+  unlockInitialOperationsInThisSession(): void;
+
+  // iOS-only
+
+  /** Sets the App Group name for shared storage (iOS only). */
+  setAppGroup(groupName: string | null): void;
 }
 
 // ---------------- Export ----------------

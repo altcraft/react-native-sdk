@@ -837,6 +837,119 @@ static NSDictionary * _Nullable SdkConvertUTMToNSDictionary(JS::NativeSdk::UTM &
   CallSetUserDefaultsValue(module, sn, k, v);
 }
 
+#pragma mark - Profile API
+
+- (void)updateProfileFields:(NSDictionary * _Nullable)profileFields
+                skipTriggers:(NSNumber *)skipTriggers
+{
+  id module = SdkAppModuleSharedInstance();
+  EnsureProvidersInstalled(module);
+
+  SEL sel = SdkSel(@"updateProfileFields:skipTriggers:");
+  if (!SdkResponds(module, sel)) return;
+
+  IMP imp = [module methodForSelector:sel];
+  if (!imp) return;
+
+  void (*func)(id, SEL, id, id) = (void (*)(id, SEL, id, id))imp;
+  func(module, sel, (NSDictionary *)SdkNilIfNSNull(profileFields), (NSNumber *)SdkNilIfNSNull(skipTriggers));
+}
+
+#pragma mark - Token management API
+
+- (void)forcedTokenUpdate:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject
+{
+  id module = SdkAppModuleSharedInstance();
+  EnsureProvidersInstalled(module);
+  CallPromise0Args(module, @"forcedTokenUpdateWithResolver:rejecter:", resolve, reject);
+}
+
+- (void)deleteDeviceToken:(NSString *)provider
+                  resolve:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject
+{
+  id module = SdkAppModuleSharedInstance();
+  EnsureProvidersInstalled(module);
+  CallPromise1StringArg(module, @"deleteDeviceTokenWithProvider:resolver:rejecter:", provider, resolve, reject);
+}
+
+- (void)changePushProviderPriorityList:(NSArray *)priorityList
+                               resolve:(RCTPromiseResolveBlock)resolve
+                                reject:(RCTPromiseRejectBlock)reject
+{
+  id module = SdkAppModuleSharedInstance();
+  EnsureProvidersInstalled(module);
+
+  SEL sel = SdkSel(@"changePushProviderPriorityList:");
+  if (!SdkResponds(module, sel)) {
+    reject(@"ERR_METHOD_NOT_FOUND", @"changePushProviderPriorityList: not found", nil);
+    return;
+  }
+
+  IMP imp = [module methodForSelector:sel];
+  if (!imp) {
+    reject(@"ERR_METHOD_NOT_FOUND", @"changePushProviderPriorityList: not found", nil);
+    return;
+  }
+
+  void (*func)(id, SEL, id) = (void (*)(id, SEL, id))imp;
+  func(module, sel, priorityList ?: @[]);
+  resolve((id)kCFNull);
+}
+
+#pragma mark - PushReceiver helpers
+
+- (NSNumber *)isAltcraftPush:(NSDictionary * _Nullable)message
+{
+  id module = SdkAppModuleSharedInstance();
+  if (!module) return @NO;
+
+  SEL sel = SdkSel(@"isAltcraftPush:");
+  if (!SdkResponds(module, sel)) return @NO;
+
+  IMP imp = [module methodForSelector:sel];
+  if (!imp) return @NO;
+
+  BOOL (*func)(id, SEL, id) = (BOOL (*)(id, SEL, id))imp;
+  BOOL result = func(module, sel, (NSDictionary *)SdkNilIfNSNull(message));
+  return [NSNumber numberWithBool:result];
+}
+
+#pragma mark - Session unlock
+
+- (void)unlockInitialOperationsInThisSession
+{
+  id module = SdkAppModuleSharedInstance();
+  if (!module) return;
+
+  SEL sel = SdkSel(@"unlockInitialOperationsInThisSession");
+  if (!SdkResponds(module, sel)) return;
+
+  IMP imp = [module methodForSelector:sel];
+  if (!imp) return;
+
+  void (*func)(id, SEL) = (void (*)(id, SEL))imp;
+  func(module, sel);
+}
+
+#pragma mark - App Group
+
+- (void)setAppGroup:(NSString * _Nullable)groupName
+{
+  id module = SdkAppModuleSharedInstance();
+  if (!module) return;
+
+  SEL sel = SdkSel(@"setAppGroup:");
+  if (!SdkResponds(module, sel)) return;
+
+  IMP imp = [module methodForSelector:sel];
+  if (!imp) return;
+
+  void (*func)(id, SEL, id) = (void (*)(id, SEL, id))imp;
+  func(module, sel, (NSString *)SdkNilIfNSNull(groupName));
+}
+
 #pragma mark - iOS-only stubs (kept if present in spec / facade)
 
 - (void)deliveryEvent:(NSDictionary * _Nullable)message

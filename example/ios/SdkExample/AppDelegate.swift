@@ -5,20 +5,16 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 
-import FirebaseCore
-import FirebaseMessaging
-
 import Altcraft
 import Sdk
 
-private let APP_GROUP_SUITE = "group.your.id"
+private let APP_GROUP_SUITE = "group.altcraft.react.native.example"
 
 private let jwtProvider = JWTProvider()
 private let apnsProvider = APNSProvider()
-private let fcmProvider = FCMProvider()
 
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
   var window: UIWindow?
   var reactNativeDelegate: ReactNativeDelegate?
@@ -30,35 +26,28 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    if FirebaseApp.app() == nil {
-      FirebaseApp.configure()
-    }
-    
-    // MARK: - Alctarft setting
-    
+    // MARK: - Altcraft setting
+
     let altcraftSDK = AltcraftSDK.shared
     altcraftSDK.setAppGroup(groupName: APP_GROUP_SUITE)
     altcraftSDK.backgroundTasks.registerBackgroundTask()
     altcraftSDK.setJWTProvider(provider: jwtProvider)
-    altcraftSDK.pushTokenFunction.setAPNSTokenProvider(
-      apnsProvider
-    )
-    altcraftSDK.pushTokenFunction.setFCMTokenProvider(
-      fcmProvider
-    )
+    altcraftSDK.pushTokenFunctions.setAPNSTokenProvider(
+        apnsProvider
+      )
     altcraftSDK.notificationManager.registerForPushNotifications(
       for: application
     )
-    
+
     // MARK: -
-    
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
 
     reactNativeDelegate = delegate
     reactNativeFactory = factory
-    
+
     window = UIWindow(frame: UIScreen.main.bounds)
     factory.startReactNative(
       withModuleName: "SdkExample", in: window, launchOptions: launchOptions
@@ -87,4 +76,3 @@ final class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
 #endif
   }
 }
-

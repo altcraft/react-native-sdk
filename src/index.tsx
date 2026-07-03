@@ -14,7 +14,7 @@ import NativeSDK, {
   type SdkEvent,
 } from './NativeSdk';
 
-import { Utilities } from './Utilities';
+import { Utilities, ActionFieldBuilder, actionField } from './Utilities';
 
 // ---------------- SDK API ----------------
 
@@ -182,7 +182,10 @@ export function getPushToken(): Promise<TokenData | null> {
  * @param token Token string or `null` to clear.
  * @returns Promise that resolves when the token is saved on native side.
  */
-export function setPushToken(provider: string, token: string | null): Promise<void> {
+export function setPushToken(
+  provider: string,
+  token: string | null
+): Promise<void> {
   return NativeSDK.setPushToken(provider, token);
 }
 
@@ -196,7 +199,6 @@ export function setPushToken(provider: string, token: string | null): Promise<vo
 export function clear(): Promise<void> {
   return NativeSDK.clear();
 }
-
 
 // ---------------- MobileEvent ----------------
 
@@ -233,7 +235,7 @@ export function mobileEvent(
     matchingType,
     Utilities.toNativeStringMap(profileFields),
     Utilities.subscriptionToNativeMap(subscription),
-    utm
+    utm ?? { campaign: null, content: null, keyword: null, medium: null, source: null, temp: null }
   );
 }
 
@@ -244,54 +246,66 @@ const ALTCRAFT_SDK_EVENT_NAME = 'AltcraftSdkEvent' as const;
 const nativeEventEmitter = new NativeEventEmitter(
   NativeModules.SDKEventEmitter
 );
+
 let eventsSubscription: EventsSubscription = null;
+const eventHandlers = new Set<(event: SdkEvent) => void>();
+
+function ensureNativeSubscription(): void {
+  if (eventsSubscription === null) {
+    NativeSDK.subscribeToEvents();
+    eventsSubscription = nativeEventEmitter.addListener(
+      ALTCRAFT_SDK_EVENT_NAME,
+      (...args: unknown[]) => {
+        const event = (args[0] ?? null) as SdkEvent | null;
+        if (!event) return;
+
+        const handlers = Array.from(eventHandlers);
+        for (const handler of handlers) {
+          try {
+            handler(event);
+          } catch (e) {
+            console.warn('[AltcraftSDK] subscribeToEvents handler error:', e);
+          }
+        }
+      }
+    );
+  }
+}
 
 /**
  * Subscribes to native SDK events and routes them to the provided handler.
  *
- * The SDK emits events via `NativeEventEmitter` with name {@link ALTCRAFT_SDK_EVENT_NAME}.
- * Calling this function multiple times replaces the previous JS listener.
+ * Multiple callers can subscribe independently — each handler receives every event.
+ * The native subscription is activated only once (first caller).
  *
  * @param handler Callback invoked for each incoming SDK event.
  *               The event object is produced by native and follows {@link SdkEvent}.
  */
 export function subscribeToEvents(handler: (event: SdkEvent) => void): void {
-  if (eventsSubscription) {
-    eventsSubscription.remove();
-    eventsSubscription = null;
-  }
-
-  // Enables native-side subscription (starts producing events).
-  NativeSDK.subscribeToEvents();
-
-  eventsSubscription = nativeEventEmitter.addListener(
-    ALTCRAFT_SDK_EVENT_NAME,
-    (...args: unknown[]) => {
-      const event = (args[0] ?? null) as SdkEvent | null;
-      if (!event) return;
-
-      try {
-        handler(event);
-      } catch (e) {
-        console.warn('[AltcraftSDK] subscribeToEvents handler error:', e);
-      }
-    }
-  );
+  eventHandlers.add(handler);
+  ensureNativeSubscription();
 }
 
 /**
- * Unsubscribes from native SDK events.
+ * Unsubscribes a specific handler from native SDK events.
  *
- * Removes the JS listener and instructs native module to stop emitting events.
+ * When the last handler is removed, the native subscription is also released.
  * Safe to call even if not subscribed.
  */
-export function unsubscribeFromEvent(): void {
-  if (eventsSubscription) {
-    eventsSubscription.remove();
-    eventsSubscription = null;
+export function unsubscribeFromEvent(
+  handler?: (event: SdkEvent) => void
+): void {
+  if (handler) {
+    eventHandlers.delete(handler);
   }
 
-  NativeSDK.unsubscribeFromEvent();
+  if (eventHandlers.size === 0) {
+    if (eventsSubscription) {
+      eventsSubscription.remove();
+      eventsSubscription = null;
+    }
+    NativeSDK.unsubscribeFromEvent();
+  }
 }
 
 //Android-only behavior
@@ -310,7 +324,7 @@ export function takePush(message: Record<string, string>): void {
 
 /**
  * Requests notification permission (Android-only behavior).
- * On Android it may trigger runtime permission flow, 
+ * On Android it may trigger runtime permission flow,
  * n iOS it can be a no-op or routed to native implementation.
  */
 export function requestNotificationPermission(): void {
@@ -332,9 +346,14 @@ export function deliveryEvent(
   const nativePayload =
     message && Object.keys(message).length > 0 ? { ...message } : null;
 
-  (NativeSDK as unknown as {
-    deliveryEvent: (m: Record<string, string> | null, uid: string | null) => void;
-  }).deliveryEvent(nativePayload, messageUID);
+  (
+    NativeSDK as unknown as {
+      deliveryEvent: (
+        m: Record<string, string> | null,
+        uid: string | null
+      ) => void;
+    }
+  ).deliveryEvent(nativePayload, messageUID);
 }
 
 /**
@@ -350,9 +369,11 @@ export function openEvent(
   const nativePayload =
     message && Object.keys(message).length > 0 ? { ...message } : null;
 
-  (NativeSDK as unknown as {
-    openEvent: (m: Record<string, string> | null, uid: string | null) => void;
-  }).openEvent(nativePayload, messageUID);
+  (
+    NativeSDK as unknown as {
+      openEvent: (m: Record<string, string> | null, uid: string | null) => void;
+    }
+  ).openEvent(nativePayload, messageUID);
 }
 
 // ---------------- UserDefaults ----------------
@@ -370,6 +391,96 @@ export function setUserDefaultsValue(
 ): void {
   const str = Utilities.toUserDefaultsString(value);
   return NativeSDK.setUserDefaultsValue(suiteName, key, str);
+}
+
+// ---------------- Profile API ----------------
+
+/**
+ * Updates profile fields on the server.
+ *
+ * @param profileFields Optional profile fields to update.
+ * @param skipTriggers Optional flag to skip trigger execution on the server.
+ */
+export function updateProfileFields(
+  profileFields: Record<string, unknown> | null = null,
+  skipTriggers: boolean | null = null
+): void {
+  NativeSDK.updateProfileFields(
+    Utilities.toNativeStringMap(profileFields),
+    skipTriggers
+  );
+}
+
+// ---------------- Token management API ----------------
+
+/**
+ * Forces a push token refresh (delete current token + re-register).
+ *
+ * @returns Promise that resolves when the token update flow completes.
+ */
+export function forcedTokenUpdate(): Promise<void> {
+  return NativeSDK.forcedTokenUpdate();
+}
+
+/**
+ * Deletes the device token for a given provider.
+ *
+ * @param provider Provider identifier (e.g. `android-firebase`, `ios-firebase`).
+ * @returns Promise that resolves when the delete call completes.
+ */
+export function deleteDeviceToken(provider: string): Promise<void> {
+  return NativeSDK.deleteDeviceToken(provider);
+}
+
+/**
+ * Changes the push provider priority list at runtime.
+ *
+ * @param priorityList Ordered list of provider identifiers.
+ * @returns Promise that resolves when the priority list is updated.
+ */
+export function changePushProviderPriorityList(
+  priorityList: string[] | null
+): Promise<void> {
+  if (!priorityList || priorityList.length === 0) {
+    return Promise.resolve();
+  }
+  return NativeSDK.changePushProviderPriorityList(priorityList);
+}
+
+// ---------------- PushReceiver helpers ----------------
+
+/**
+ * Checks whether a push payload belongs to Altcraft.
+ *
+ * @param message Push payload map (string-only).
+ * @returns `true` if the message contains the Altcraft marker key.
+ */
+export function isAltcraftPush(message: Record<string, string>): boolean {
+  if (!message || Object.keys(message).length === 0) return false;
+  return NativeSDK.isAltcraftPush({ ...message });
+}
+
+// ---------------- SDK lifecycle ----------------
+
+/**
+ * Allows re-running initial retry/scheduling/token-check logic
+ * in this process on the next initialization (Android only).
+ * No-op on iOS.
+ */
+export function unlockInitialOperationsInThisSession(): void {
+  NativeSDK.unlockInitialOperationsInThisSession();
+}
+
+// ---------------- iOS-only ----------------
+
+/**
+ * Sets the App Group name for shared UserDefaults and Core Data (iOS only).
+ * Must be called before SDK initialization.
+ *
+ * @param groupName App Group identifier or `null` to clear.
+ */
+export function setAppGroup(groupName: string | null): void {
+  NativeSDK.setAppGroup(groupName);
 }
 
 // ---------------- Default export ----------------
@@ -423,9 +534,26 @@ const AltcraftSDK = {
   deliveryEvent,
   openEvent,
   requestNotificationPermission,
+  unlockInitialOperationsInThisSession,
+
+  // Profile API
+  updateProfileFields,
+
+  // Token management
+  forcedTokenUpdate,
+  deleteDeviceToken,
+  changePushProviderPriorityList,
+
+  // PushReceiver helpers
+  isAltcraftPush,
+
+  // iOS only
+  setAppGroup,
 };
 
 export default AltcraftSDK;
+
+export { ActionFieldBuilder, actionField };
 
 export type {
   AltcraftConfig,

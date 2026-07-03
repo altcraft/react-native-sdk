@@ -9,7 +9,7 @@ import Altcraft
 import UserNotifications
 
 class NotificationService: UNNotificationServiceExtension {
-    let appGroupID =  "group.your.id"
+    let appGroupID =  "group.altcraft.react.native.example"
     
     let jwtProvider = JWTProvider()
     

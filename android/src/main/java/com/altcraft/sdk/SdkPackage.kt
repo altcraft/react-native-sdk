@@ -9,10 +9,10 @@ import java.util.HashMap
 
 class SdkPackage : BaseReactPackage() {
   override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
-    return if (name == SdkModule.NAME) {
-      SdkModule(reactContext)
-    } else {
-      null
+    return when (name) {
+      SdkModule.NAME -> SdkModule(reactContext)
+      SdkEventEmitter.NAME -> SdkEventEmitter(reactContext)
+      else -> null
     }
   }
 
@@ -22,10 +22,18 @@ class SdkPackage : BaseReactPackage() {
       moduleInfos[SdkModule.NAME] = ReactModuleInfo(
         SdkModule.NAME,
         SdkModule.NAME,
-        false,  // canOverrideExistingModule
-        false,  // needsEagerInit
-        false,  // isCxxModule
-        true // isTurboModule
+        false,
+        false,
+        false,
+        true
+      )
+      moduleInfos[SdkEventEmitter.NAME] = ReactModuleInfo(
+        SdkEventEmitter.NAME,
+        SdkEventEmitter.NAME,
+        false,
+        false,
+        false,
+        false
       )
       moduleInfos
     }

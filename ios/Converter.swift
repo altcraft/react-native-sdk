@@ -20,9 +20,9 @@ import Altcraft
 /// - Conversion of arbitrary values into `UserDefaults`-compatible property list values.
 ///
 /// All functions are stateless and intended to be used from the React Native bridge layer.
-enum Converter {
+enum Converter: @unchecked Sendable {
 
-  private static let iso8601: ISO8601DateFormatter = {
+  nonisolated(unsafe) static let iso8601: ISO8601DateFormatter = {
     let f = ISO8601DateFormatter()
     return f
   }()

@@ -12,17 +12,14 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.altcraft.sdk.interfaces.JWTInterface
 import com.altcraft.sdk.AltcraftSDK
-import sdk.example.FCMProvider
 
-
+@Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
 class MainApplication : Application(), ReactApplication {
 
   override val reactNativeHost: ReactNativeHost =
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
-              // Packages that cannot be autolinked yet can be added manually here, for example:
-              // add(MyReactNativePackage())
             }
 
         override fun getJSMainModuleName(): String = "index"
@@ -40,7 +37,9 @@ class MainApplication : Application(), ReactApplication {
     super.onCreate()
     loadReactNative(this)
     AltcraftSDK.setJWTProvider(JWTProvider(this))
-    AltcraftSDK.pushTokenFunctions.setFCMTokenProvider(FCMProvider())
+    // Firebase config files are intentionally not included in the public example.
+    // Add example/android/app/google-services.json before enabling FCM token provider.
+    // AltcraftSDK.pushTokenFunctions.setFCMTokenProvider(FCMProvider())
   }
 }
 

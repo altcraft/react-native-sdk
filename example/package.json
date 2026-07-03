@@ -10,10 +10,16 @@
     "build:ios": "react-native build-ios --mode Debug"
   },
   "dependencies": {
+    "@altcraft/react-native-sdk": "workspace:*",
+    "@react-native-community/async-storage": "^1.12.1",
     "@react-native-firebase/app": "^23.7.0",
     "@react-native-firebase/messaging": "^23.8.6",
+    "@react-navigation/bottom-tabs": "^7.18.2",
+    "@react-navigation/native": "^7.3.3",
     "react": "19.1.0",
-    "react-native": "0.81.1"
+    "react-native": "0.81.1",
+    "react-native-safe-area-context": "^5.8.0",
+    "react-native-screens": "^4.25.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

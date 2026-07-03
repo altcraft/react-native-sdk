@@ -22,7 +22,7 @@ Pod::Spec.new do |s|
   s.public_header_files = "ios/**/*.h"
 
   # --- Swift / Module settings (critical for <Sdk/Sdk-Swift.h>) ---
-  s.swift_version = "5.0"
+  s.swift_version = "6.0"
   s.pod_target_xcconfig = {
     "DEFINES_MODULE" => "YES",
     "CLANG_ENABLE_MODULES" => "YES",
@@ -30,7 +30,7 @@ Pod::Spec.new do |s|
   }
 
   # --- Native dependency ---
-  s.dependency "Altcraft", "0.1.2"
+  s.dependency "Altcraft", "1.0.3"
 
   # --- React Native module deps ---
   install_modules_dependencies(s)

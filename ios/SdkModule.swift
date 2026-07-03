@@ -11,6 +11,13 @@ import Foundation
 import Altcraft
 import React
 
+// MARK: - Sendable Box
+
+private struct UncheckedSendableBox<T>: @unchecked Sendable {
+  let value: T
+  init(_ value: T) { self.value = value }
+}
+
 // MARK: - Constants
 
 private enum RnConstants {
@@ -71,7 +78,7 @@ private enum RnConstants {
 @objc(SdkModule)
 @objcMembers
 @available(iOSApplicationExtension, unavailable)
-public final class SdkModule: NSObject {
+public final class SdkModule: NSObject, @unchecked Sendable {
 
   // MARK: - Singleton & State
 
@@ -132,10 +139,12 @@ public final class SdkModule: NSObject {
     configuration = built
     lock.unlock()
 
+    let resolveBox = UncheckedSendableBox(resolve)
+    let rejectBox = UncheckedSendableBox(reject)
     AltcraftSDK.shared.initialization(configuration: built) { ok in
-      if ok { resolve(nil) }
+      if ok { resolveBox.value(nil) }
       else {
-        reject(
+        rejectBox.value(
           RnConstants.errInitError,
           RnConstants.msgInitializationFailed, nil
         )
@@ -158,10 +167,10 @@ public final class SdkModule: NSObject {
   // MARK: - RCTEventEmitter
 
   @objc(SDKEventEmitter)
-  final class SDKEventEmitter: RCTEventEmitter {
+  final class SDKEventEmitter: RCTEventEmitter, @unchecked Sendable {
 
-    private static weak var _shared: SDKEventEmitter?
-    private static var pending: [(String, Any?)] = []
+    nonisolated(unsafe) static var _shared: SDKEventEmitter?
+    nonisolated(unsafe) static var pending: [(String, Any?)] = []
     private static let pendingLock = NSLock()
 
     /// Creates the event emitter instance and flushes any buffered events.
@@ -194,16 +203,18 @@ public final class SdkModule: NSObject {
     ///   - name: Event name.
     ///   - body: Event payload.
     @objc static func emit(name: String, body: Any?) {
-      let deliver = {
+      let n = name
+      let b = body
+      let deliver: @convention(block) () -> Void = {
         if let emitter = _shared {
-          emitter.sendEvent(withName: name, body: body)
+          emitter.sendEvent(withName: n, body: b)
         } else {
-          buffer(name: name, body: body)
+          buffer(name: n, body: b)
         }
       }
 
       if Thread.isMainThread { deliver() }
-      else { DispatchQueue.main.async { deliver() } }
+      else { DispatchQueue.main.async(execute: deliver) }
     }
 
     /// Buffers an event until the emitter becomes available.
@@ -307,9 +318,10 @@ public final class SdkModule: NSObject {
   /// - Parameter completion: Called with `{ provider, token }` or `nil` if unavailable.
   @objc(getPushTokenWithCompletion:)
   public func getPushToken(_ completion: @escaping ([String: Any]?) -> Void) {
-    AltcraftSDK.shared.pushTokenFunction.getPushToken { tokenData in
-      guard let tokenData else { completion(nil); return }
-      completion([
+    let completionBox = UncheckedSendableBox(completion)
+    AltcraftSDK.shared.pushTokenFunctions.getPushToken { tokenData in
+      guard let tokenData else { completionBox.value(nil); return }
+      completionBox.value([
         RnConstants.keyProvider: tokenData.provider,
         RnConstants.keyToken: tokenData.token
       ])
@@ -329,7 +341,7 @@ public final class SdkModule: NSObject {
       return String(describing: pushToken!)
     }()
 
-    AltcraftSDK.shared.pushTokenFunction.setPushToken(
+    AltcraftSDK.shared.pushTokenFunctions.setPushToken(
       provider: provider,
       pushToken: (tokenStr ?? "")
     )
@@ -490,11 +502,12 @@ public final class SdkModule: NSObject {
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    let resolveBox = UncheckedSendableBox(resolve)
     _ = reject
     AltcraftSDK.shared.pushSubscriptionFunctions.unSuspendPushSubscription { [weak self] result in
-      guard let self else { resolve(NSNull()); return }
-      guard let result else { resolve(NSNull()); return }
-      resolve(mapResponseWithHttp(result))
+      guard let self else { resolveBox.value(NSNull()); return }
+      guard let result else { resolveBox.value(NSNull()); return }
+      resolveBox.value(mapResponseWithHttp(result))
     }
   }
 
@@ -508,11 +521,12 @@ public final class SdkModule: NSObject {
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    let resolveBox = UncheckedSendableBox(resolve)
     _ = reject
     AltcraftSDK.shared.pushSubscriptionFunctions.getStatusOfLatestSubscription { [weak self] result in
-      guard let self else { resolve(NSNull()); return }
-      guard let result else { resolve(NSNull()); return }
-      resolve(mapResponseWithHttp(result))
+      guard let self else { resolveBox.value(NSNull()); return }
+      guard let result else { resolveBox.value(NSNull()); return }
+      resolveBox.value(mapResponseWithHttp(result))
     }
   }
 
@@ -526,11 +540,12 @@ public final class SdkModule: NSObject {
     resolver resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
+    let resolveBox = UncheckedSendableBox(resolve)
     _ = reject
     AltcraftSDK.shared.pushSubscriptionFunctions.getStatusForCurrentSubscription { [weak self] result in
-      guard let self else { resolve(NSNull()); return }
-      guard let result else { resolve(NSNull()); return }
-      resolve(mapResponseWithHttp(result))
+      guard let self else { resolveBox.value(NSNull()); return }
+      guard let result else { resolveBox.value(NSNull()); return }
+      resolveBox.value(mapResponseWithHttp(result))
     }
   }
 
@@ -547,14 +562,15 @@ public final class SdkModule: NSObject {
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
     _ = reject
+    let resolveBox = UncheckedSendableBox(resolve)
     AltcraftSDK.shared.pushSubscriptionFunctions
-      .getStatusOfLatestSubscriptionForProvider(
-        provider: provider
-      ) { [weak self] result in
-        guard let self else { resolve(NSNull()); return }
-        guard let result else { resolve(NSNull()); return }
-        resolve(mapResponseWithHttp(result))
-      }
+       .getStatusOfLatestSubscriptionForProvider(
+         provider: provider
+       ) { [weak self] result in
+         guard let self else { resolveBox.value(NSNull()); return }
+         guard let result else { resolveBox.value(NSNull()); return }
+         resolveBox.value(mapResponseWithHttp(result))
+       }
   }
 
   /// Maps a native `ResponseWithHttp` into a JS-friendly dictionary.
@@ -667,5 +683,96 @@ public final class SdkModule: NSObject {
     } else {
       ud.removeObject(forKey: k)
     }
+  }
+
+  // MARK: - Profile API
+
+  /// Updates profile fields on the server.
+  ///
+  /// - Parameters:
+  ///   - profileFields: Optional profile fields map (primitives only).
+  ///   - skipTriggers: Optional flag to skip trigger execution on the server.
+  @objc(updateProfileFields:skipTriggers:)
+  public func updateProfileFields(
+    _ profileFields: NSDictionary?,
+    skipTriggers: NSNumber?
+  ) {
+    let st: Bool? = (skipTriggers != nil) ? skipTriggers!.boolValue : nil
+    AltcraftSDK.shared.profileFunctions.updateProfileFields(
+      profileFields: Converter.toAnyDict(profileFields),
+      skipTriggers: st
+    )
+  }
+
+  // MARK: - Token management API
+
+  /// Forces a push token refresh (delete + re-register).
+  ///
+  /// - Parameters:
+  ///   - resolve: Promise resolver called when the flow completes.
+  ///   - reject: Promise rejecter (unused; kept for RN signature compatibility).
+  @objc(forcedTokenUpdateWithResolver:rejecter:)
+  public func forcedTokenUpdate(
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let resolveBox = UncheckedSendableBox(resolve)
+    _ = reject
+    AltcraftSDK.shared.pushTokenFunctions.forcedTokenUpdate {
+      resolveBox.value(nil)
+    }
+  }
+
+  /// Deletes the device token for a given provider.
+  ///
+  /// - Parameters:
+  ///   - provider: Provider identifier (e.g. `ios-firebase`, `ios-huawei`).
+  ///   - resolve: Promise resolver called when the delete call completes.
+  ///   - reject: Promise rejecter (unused; kept for RN signature compatibility).
+  @objc(deleteDeviceTokenWithProvider:resolver:rejecter:)
+  public func deleteDeviceToken(
+    provider: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let resolveBox = UncheckedSendableBox(resolve)
+    _ = reject
+    AltcraftSDK.shared.pushTokenFunctions.deleteDeviceToken(
+      provider: provider
+    ) {
+      resolveBox.value(nil)
+    }
+  }
+
+  /// Changes the push provider priority list at runtime.
+  ///
+  /// - Parameter priorityList: Ordered list of provider identifiers.
+  @objc(changePushProviderPriorityList:)
+  public func changePushProviderPriorityList(_ priorityList: NSArray) {
+    let list = priorityList.compactMap { $0 as? String }
+    AltcraftSDK.shared.pushTokenFunctions.changePushProviderPriorityList(list)
+  }
+
+  // MARK: - PushReceiver helpers
+
+  /// Checks whether a push payload belongs to Altcraft.
+  ///
+  /// - Parameter message: Push payload dictionary.
+  /// - Returns: `true` if the message contains the Altcraft marker key.
+  @objc(isAltcraftPush:)
+  public func isAltcraftPush(_ message: NSDictionary?) -> Bool {
+    guard let message else { return false }
+    return message["_ac_push"] != nil
+  }
+
+  // MARK: - App Group
+
+  /// Sets the App Group name for shared UserDefaults and Core Data.
+  /// Must be called before SDK initialization.
+  ///
+  /// - Parameter groupName: App Group identifier or `nil` to clear.
+  @objc(setAppGroup:)
+  public func setAppGroup(_ groupName: String?) {
+    AltcraftSDK.shared.setAppGroup(groupName: groupName)
   }
 }

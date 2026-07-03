@@ -2,45 +2,35 @@
 
 ![Altcraft SDK Logo](https://guides.altcraft.com/img/logo.svg)
 
-[![npm version](https://img.shields.io/npm/v/%40altcraft%2Freact-native-sdk?style=flat-square)](https://www.npmjs.com/package/@altcraft/react-native-sdk)
-[![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue?style=flat-square)](#)
-[![Platforms](https://img.shields.io/badge/Platforms-Android%20%7C%20iOS-green?style=flat-square)](#)
-[![Push Providers](https://img.shields.io/badge/Push-APNs%20%7C%20FCM%20%7C%20HMS%20%7C%20RuStore-orange?style=flat-square)](#)
+[![npm version](https://img.shields.io/npm/v/react-native-sdk?style=flat-square)](https://www.npmjs.com/package/react-native-sdk)
+[![React Native](https://img.shields.io/badge/React_Native-0.70%2B-blue?style=flat-square)](https://reactnative.dev/)
+[![Platforms](https://img.shields.io/badge/Platforms-Android_%7C_iOS-green?style=flat-square)](#)
+[![Push Providers](https://img.shields.io/badge/Push-FCM_%7C_APNs-orange?style=flat-square)](#)
 
-Altcraft React Native SDK is a React Native bridge for the native **Altcraft Mobile SDK** on iOS and Android. It provides a unified API for push subscription management, token handling, user authorization, and mobile event tracking in the **Altcraft Marketing platform**.
+Altcraft React Native SDK is a bridge to the native **Altcraft Mobile SDK** for Android and iOS. The SDK automates push notification delivery, event submission, request retries, and supports flexible workflows with JWT or role-based tokens.
 
 ---
 
 ## Features
 
-* [x] Works on iOS and Android.
-* [x] Push subscription management: subscribe, suspend, unsubscribe.
-* [x] Push token management and provider priority setup.
-* [x] JWT-based authorization support.
+* [x] Compatible with TypeScript and JavaScript.
+* [x] Works with anonymous and registered users; supports multiple profiles on one device (JWT).
+* [x] Push subscription management: push subscribe, push suspend, push unsubscribe.
+* [x] Automatic push token update when it changes.
+* [x] Automatic transmission of notification delivery and open events.
 * [x] Mobile events registration.
-* [x] Native-to-JS SDK event stream subscription.
-* [x] Forwarding of push intake payloads to the native SDK.
+* [x] Update profile fields.
+* [x] Automatic retry of failed requests.
+* [x] Support for push providers: Firebase FCM (Android), APNs (iOS).
+* [x] Secure requests using JWT and flexible identifier matching.
+* [x] Support for rToken for simple subscription scenarios.
+* [x] SDK data cleanup and background tasks termination.
 
 ---
 
-## Requirements
+## Dependency
 
-* React Native 0.70+.
-* iOS 13.0+.
-* Android 7.1+ (API 25).
-* Push provider SDK integrated in the host app:
-  * iOS: APNs (optionally Firebase/Huawei if used in your setup).
-  * Android: Firebase FCM / Huawei HMS / RuStore.
-
----
-
-## Installation
-
-```sh
-yarn add altcraft-react-native-sdk
-# or
-npm i altcraft-react-native-sdk
-```
+`react-native-sdk:0.0.5`
 
 ---
 
@@ -48,7 +38,7 @@ npm i altcraft-react-native-sdk
 
 ### JWT-Authorization (recommended approach)
 
-JWT is added to the header of every request. The SDK receives the current token from the app and applies it to native requests.
+JWT is added to the header of every request. The SDK requests the current token from the app via the `JWTInterface`.
 
 **Advantages:**
 
@@ -58,26 +48,41 @@ JWT is added to the header of every request. The SDK receives the current token 
 * Profile persists after app reinstallation.
 * Unified user identity across devices.
 
-### Authorization with a role token (rToken)
+### Authorization with a role token (*rToken*)
 
-The role token is configured on the native side.
+The role token is specified in the SDK configuration.
+Profile lookup is limited to the push token identifier.
 
 **Limitations:**
 
-* Profile lookup is limited to the push token identifier.
+* The link to a profile may be lost if the push token changes and the change isn't reflected on the platform.
 * No multi-profile support.
-* It’s not possible to register the same user on another device.
+* It's not possible to register the same user on another device.
 
 ---
 
-## Documentation
+## Requirements
 
-Detailed information on SDK setup, functionality, and usage is available on the Altcraft documentation portal:
+* React Native 0.70+.
+* Android 7.1+ (API 25).
+* iOS 13.0+.
+* Push provider integrated in the host app (FCM for Android, APNs for iOS).
 
-* [**Quick Start**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/quick-start)
-* [**SDK Functionality**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/functionality)
-* [**SDK Configuration**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/setup)
-* [**API Reference**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/api)
+---
+
+## Documentations
+
+Detailed information on SDK setup, functionality, and usage is available on the Altcraft documentation portal. You can navigate to the required section using the links below:
+
+- [**Quick Start**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/quick-start)
+- [**SDK Functionality**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/functionality)
+- [**SDK Configuration**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/setup)
+- [**Classes and Structures**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/api)
+
+**Provider Setup**
+
+- [FCM](https://guides.altcraft.com/en/developer-guide/sdk/mobile/android/providers/fcm/)
+- [APNs](https://guides.altcraft.com/en/developer-guide/sdk/mobile/ios/providers/apns/)
 
 ---
 
@@ -90,7 +95,7 @@ END USER LICENSE AGREEMENT
 Copyright © 2024 Altcraft LLC. All rights reserved.
 
 1. LICENSE GRANT
-   This agreement grants you certain rights to use the Altcraft Mobile SDK (hereinafter referred to as the “Software”).
+   This agreement grants you certain rights to use the Altcraft Mobile SDK (hereinafter referred to as the "Software").
    All rights not expressly granted by this agreement remain with the copyright holder.
 
 2. USE
@@ -103,7 +108,7 @@ Copyright © 2024 Altcraft LLC. All rights reserved.
    Publication of modified Software requires prior written permission from the copyright holder.
 
 5. DISCLAIMER OF WARRANTIES
-   The Software is provided “as is,” without any warranties, express or implied, including but not limited to
+   The Software is provided "as is," without any warranties, express or implied, including but not limited to
    warranties of merchantability, fitness for a particular purpose, and non-infringement of third-party rights.
 
 6. LIMITATION OF LIABILITY
@@ -119,8 +124,15 @@ Copyright © 2024 Altcraft LLC. All rights reserved.
    This Software may include components distributed under other licenses. The full list of such components
    and their respective licenses is provided below:
 
-Apache License 2.0
+### Third-party libraries and licenses
 
-* [React Native](https://reactnative.dev)
-* [Swift](https://swift.org)
-* [Kotlin](https://kotlinlang.org)
+  **Apache License 2.0**
+Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+* [React Native](https://github.com/facebook/react-native)
+* [TypeScript](https://www.typescriptlang.org/)
+
+**MIT License**
+
+* [React](https://github.com/facebook/react)

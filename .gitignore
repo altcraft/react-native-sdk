@@ -1,8 +1,7 @@
 # OSX
-#
 .DS_Store
 
-# XDE
+# XDE / Expo
 .expo/
 
 # VSCode
@@ -10,7 +9,6 @@
 jsconfig.json
 
 # Xcode
-#
 build/
 *.pbxuser
 !default.pbxuser
@@ -30,35 +28,55 @@ DerivedData
 project.xcworkspace
 **/.xcode.env.local
 
-# Android/IJ
-#
+# iOS build artifacts
+ios/Pods/
+ios/build/
+example/ios/Pods/
+example/ios/build/
+
+# Android / IntelliJ
 .classpath
-.cxx
-.gradle
-.idea
+.cxx/
+.gradle/
+.idea/
 .project
-.settings
+.settings/
 local.properties
 android.iml
+*.iml
 
-# Cocoapods
-#
-example/ios/Pods
+# Android build artifacts
+android/build/
+android/app/build/
+example/android/build/
+example/android/app/build/
+
+# Kotlin / Gradle
+*.kotlin_module
+
+# CocoaPods
+Pods/
 
 # Ruby
 example/vendor/
 
-# node.js
-#
+# Node.js
 node_modules/
-npm-debug.log
-yarn-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Environment
+.env
+.env.*
+!.env.example
 
 # BUCK
 buck-out/
-\.buckd/
-android/app/libs
+.buckd/
+android/app/libs/
 android/keystores/debug.keystore
 
 # Yarn
@@ -69,9 +87,6 @@ android/keystores/debug.keystore
 !.yarn/sdks
 !.yarn/versions
 
-# Expo
-.expo/
-
 # Turborepo
 .turbo/
 
@@ -79,8 +94,17 @@ android/keystores/debug.keystore
 lib/
 
 # React Native Codegen
-ios/generated
-android/generated
+ios/generated/
+android/generated/
 
 # React Native Nitro Modules
 nitrogen/
+
+# Metro
+.metro-cache/
+
+# Watchman
+.watchmanconfig
+
+# npm package archives
+*.tgz

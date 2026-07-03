@@ -1,19 +1,13 @@
 // Push.ts
 
-import { Platform } from 'react-native';
-import AltcraftSDK from 'react-native-sdk';
-
-// FCM
-import messaging from '@react-native-firebase/messaging';
-import type { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
-
-
 export type PushPayload = Record<string, string>;
 
 // ---------- Utils ----------
 
 // Конвертация data payload в Record<string, string>
-export function RemoteMessagetoStringMap(input: unknown): Record<string, string> | null {
+export function RemoteMessagetoStringMap(
+  input: unknown
+): Record<string, string> | null {
   if (input == null) return null;
 
   let obj: unknown = input;
@@ -37,54 +31,21 @@ export function RemoteMessagetoStringMap(input: unknown): Record<string, string>
   return Object.keys(out).length ? out : null;
 }
 
-// ---------- Flags ----------
-
-let fcmBg = false;
-let fcmFg = false;
-let fcmToken = false;
-
 // ---------- FCM ----------
 
-// Синхронизация FCM-токена
+// Firebase config files are intentionally not included in the public example.
+// Add google-services.json / GoogleService-Info.plist and restore the Firebase
+// Messaging calls if you want to test FCM push delivery.
 export function registerFCMPushTokenSync(): void {
-  if (fcmToken || Platform.OS !== 'android') return;
-  fcmToken = true;
-
-  (async () => {
-    try {
-      await messaging().requestPermission();
-      const token = await messaging().getToken();
-      //await AltcraftSDK.setPushToken('android-firebase', token);
-    } catch {
-      //await AltcraftSDK.setPushToken('android-firebase', null);
-    }
-  })();
-
-  messaging().onTokenRefresh((t) => {
-    AltcraftSDK.setPushToken('android-firebase', t).catch(() => {});
-  });
+  // FCM disabled in public example.
 }
 
-// Background FCM
 export function registerFCMBackgroundPush(): void {
-  if (fcmBg || Platform.OS !== 'android') return;
-  fcmBg = true;
-
-  messaging().setBackgroundMessageHandler(async (rm) => {
-    // const payload = RemoteMessagetoStringMap(rm?.data);
-    // if (payload) AltcraftSDK.takePush(payload);
-  });
+  // FCM disabled in public example.
 }
 
-// Foreground FCM
 export function registerFCMForegroundPush(): void {
-  if (fcmFg || Platform.OS !== 'android') return;
-  fcmFg = true;
-
-  messaging().onMessage(async (rm: FirebaseMessagingTypes.RemoteMessage) => {
-    // const payload = RemoteMessagetoStringMap(rm?.data);
-    // if (payload) AltcraftSDK.takePush(payload);
-  });
+  // FCM disabled in public example.
 }
 
 // ---------- Facade ----------
