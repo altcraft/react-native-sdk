@@ -14,6 +14,7 @@ export {
   Utilities,
   AltcraftException,
   SDK_ERROR,
+  toAltcraftException,
 } from './altcraft_core';
 export type {
   AltcraftConfig,

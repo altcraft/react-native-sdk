@@ -2,6 +2,7 @@ import type { CategoryData, ResponseWithHttpCode } from '@altcraft/core';
 import {
   categoryDataToNative,
   responseWithHttpCodeFromNative,
+  toAltcraftException,
   Utilities,
 } from '@altcraft/core';
 import type { TokenData } from '../models/token_data';
@@ -11,7 +12,6 @@ import type {
   AltcraftPushPlatform,
 } from './altcraft_push_platform';
 import type { PushEventOptions, PushSubscribeOptions } from '../altcraft_push';
-import { toAltcraftException } from '../altcraft_push';
 
 /**
  * Default push platform implementation backed by the native TurboModule.

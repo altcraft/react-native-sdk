@@ -19,7 +19,6 @@ export type {
   JsonContentApi,
   JsonContentHandler,
 } from './altcraft_inapp';
-export { toAltcraftException } from './altcraft_inapp';
 export type { CategoryData } from './altcraft_inapp';
 export { inAppModuleEvents } from './module_events';
 export type { InAppModuleEvents } from './module_events';

@@ -65,10 +65,10 @@ class TargetModule(reactContext: ReactApplicationContext) : NativeTargetSpec(rea
                     profileFields = Converter.toKotlinMap(
                             map.getMapOrNull(TargetConstants.KEY_PROFILE_FIELDS)
                     ),
-                    subscription = Converter.toSubscriptionOrNull(
+                    subscription = TargetConverter.toSubscriptionOrNull(
                             map.getMapOrNull(TargetConstants.KEY_SUBSCRIPTION)
                     ),
-                    utm = Converter.toUtmOrNull(map.getMapOrNull(TargetConstants.KEY_UTM))
+                    utm = TargetConverter.toUtmOrNull(map.getMapOrNull(TargetConstants.KEY_UTM))
             )
         } catch (e: Exception) {
             e.printStackTrace()

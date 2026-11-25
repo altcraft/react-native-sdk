@@ -8,7 +8,7 @@ export { AltcraftTarget } from './altcraft_target';
 export { AltcraftTargetPlatform } from './platform/altcraft_target_platform';
 export { TurboModuleAltcraftTarget } from './platform/turbo_module_altcraft_target';
 export type { MobileEventOptions } from './altcraft_target';
-export { toAltcraftException, Utilities } from './altcraft_target';
+export { Utilities } from './altcraft_target';
 export {
   emailSubscription,
   smsSubscription,

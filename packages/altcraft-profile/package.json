@@ -49,8 +49,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@altcraft/core": "^1.0.0",
-    "@altcraft/push": "^1.0.0"
+    "@altcraft/core": "^1.0.0"
   },
   "peerDependencies": {
     "react": "*",

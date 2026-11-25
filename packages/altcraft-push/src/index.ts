@@ -12,10 +12,7 @@ export { TurboModuleAltcraftPush } from './platform/turbo_module_altcraft_push';
 export * from './config_builder';
 export * from './models/push_config';
 export type { PushSubscribeOptions, PushEventOptions } from './altcraft_push';
-export {
-  responseWithHttpCodeFromNative,
-  toAltcraftException,
-} from './altcraft_push';
+export { responseWithHttpCodeFromNative } from './altcraft_push';
 export type { CategoryData, ResponseWithHttpCode } from './altcraft_push';
 export { tokenDataFromNative, tokenDataToNative } from './models/token_data';
 export type { TokenData } from './models/token_data';

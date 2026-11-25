@@ -1,7 +1,7 @@
 import { NativeEventEmitter, NativeModules } from 'react-native';
 
 import { AltcraftChannels } from '../channel_names';
-import { AltcraftException, SDK_ERROR } from '../exceptions/altcraft_exception';
+import { toAltcraftException } from '../exceptions/altcraft_exception';
 import type { AltcraftConfig } from '../models/altcraft_config';
 import { altcraftConfigToNative } from '../models/altcraft_config';
 import type { SdkEvent } from '../models/sdk_event';
@@ -187,17 +187,6 @@ function readRequestId(payload: unknown): number | null {
     }
   }
   return null;
-}
-
-/** Converts a native bridge error into an AltcraftException. */
-function toAltcraftException(e: unknown, fallback: string): AltcraftException {
-  if (e instanceof AltcraftException) return e;
-  const code =
-    e != null && typeof e === 'object' && typeof (e as { code?: unknown }).code === 'string'
-      ? (e as { code: string }).code
-      : SDK_ERROR;
-  const message = e instanceof Error ? e.message : fallback;
-  return new AltcraftException(code, message);
 }
 
 export { Utilities };

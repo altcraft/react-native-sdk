@@ -3,7 +3,11 @@ import { TurboModuleAltcraftCore } from './platform/turbo_module_altcraft_core';
 import { AltcraftChannels } from './channel_names';
 import { actionField, ActionFieldBuilder } from './action_field_builder';
 import { Utilities } from './utilities';
-import { AltcraftException, SDK_ERROR } from './exceptions/altcraft_exception';
+import {
+  AltcraftException,
+  SDK_ERROR,
+  toAltcraftException,
+} from './exceptions/altcraft_exception';
 import type { AltcraftConfig, AppInfo } from './models/altcraft_config';
 import type { CategoryData } from './models/category_data';
 import type { ResponseWithHttpCode } from './models/response_with_http_code';
@@ -152,6 +156,7 @@ export {
   Utilities,
   AltcraftException,
   SDK_ERROR,
+  toAltcraftException,
 };
 
 export type {

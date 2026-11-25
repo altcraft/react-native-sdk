@@ -20,11 +20,14 @@ The Target module is responsible for mobile events: it sends target events to th
 
 ## Dependencies
 
-Add the **Target** package, Core, and Push to your React Native application:
+Add the **Target** package and Core to your React Native application:
 
 ```sh
-npm install @altcraft/target @altcraft/core @altcraft/push
+npm install @altcraft/target @altcraft/core
 ```
+
+Push notifications are provided by the separate **Push** package and are
+only needed if your application uses push notifications.
 
 ---
 

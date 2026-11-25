@@ -1,4 +1,3 @@
-import { toAltcraftException } from '@altcraft/push';
 import type { CategoryData } from '@altcraft/core';
 import type { AltcraftInAppPlatform } from './platform/altcraft_inapp_platform';
 import { TurboModuleAltcraftInApp } from './platform/turbo_module_altcraft_inapp';
@@ -172,5 +171,4 @@ export class AltcraftInApp {
   }
 }
 
-export { toAltcraftException };
 export type { CategoryData };

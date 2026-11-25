@@ -1,6 +1,9 @@
 import { NativeEventEmitter, NativeModules } from 'react-native';
 import { AltcraftChannels, Utilities } from '@altcraft/core';
-import { categoryDataToNative } from '@altcraft/core';
+import {
+  categoryDataToNative,
+  toAltcraftException,
+} from '@altcraft/core';
 import type { CategoryData } from '@altcraft/core';
 import NativeInApp from '../native/NativeInApp';
 import type {
@@ -14,7 +17,6 @@ import type {
   InAppSubscribeOptions,
   JsonContentHandler,
 } from '../altcraft_inapp';
-import { toAltcraftException } from '../altcraft_inapp';
 
 /** Type of the shared native event emitter module. */
 type EmitterModule = {

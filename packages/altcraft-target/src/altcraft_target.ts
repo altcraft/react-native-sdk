@@ -1,4 +1,3 @@
-import { toAltcraftException } from '@altcraft/push';
 import { Utilities } from '@altcraft/core';
 import type { Subscription } from './models/subscription';
 import { subscriptionToNative } from './models/subscription';
@@ -50,5 +49,5 @@ export class AltcraftTarget {
   }
 }
 
-export { toAltcraftException, Utilities, subscriptionToNative, utmToNative };
+export { Utilities, subscriptionToNative, utmToNative };
 export type { Subscription, UTM };

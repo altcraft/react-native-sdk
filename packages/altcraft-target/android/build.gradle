@@ -73,6 +73,7 @@ dependencies {
   api project(':altcraft_core')
 
   api "com.altcraft:android-sdk-target:1.0.1"
+  implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3"
   implementation "com.facebook.react:react-android"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 }

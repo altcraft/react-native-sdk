@@ -17,11 +17,14 @@ The Profile module is responsible for user profile fields.
 
 ## Dependencies
 
-Add the **Profile** package, Core, and Push to your React Native application:
+Add the **Profile** package and Core to your React Native application:
 
 ```sh
-npm install @altcraft/profile @altcraft/core @altcraft/push
+npm install @altcraft/profile @altcraft/core
 ```
+
+Push notifications are provided by the separate **Push** package and are
+only needed if your application uses push notifications.
 
 ---
 

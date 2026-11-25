@@ -1,8 +1,7 @@
-import { Utilities } from '@altcraft/core';
+import { toAltcraftException, Utilities } from '@altcraft/core';
 import NativeTarget from '../native/NativeTarget';
 import type { AltcraftTargetPlatform } from './altcraft_target_platform';
 import type { MobileEventOptions } from '../altcraft_target';
-import { toAltcraftException } from '../altcraft_target';
 import { subscriptionToNative } from '../models/subscription';
 import { utmToNative } from '../models/utm';
 

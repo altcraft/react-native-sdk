@@ -1,8 +1,7 @@
-import { Utilities } from '@altcraft/core';
+import { toAltcraftException, Utilities } from '@altcraft/core';
 import NativeProfile from '../native/NativeProfile';
 import type { AltcraftProfilePlatform } from './altcraft_profile_platform';
 import type { UpdateProfileOptions } from '../altcraft_profile';
-import { toAltcraftException } from '../altcraft_profile';
 
 /**
  * Default profile platform implementation backed by the native TurboModule.

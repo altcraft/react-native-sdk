@@ -1,4 +1,3 @@
-import { toAltcraftException } from '@altcraft/push';
 import { Utilities } from '@altcraft/core';
 import type { AltcraftProfilePlatform } from './platform/altcraft_profile_platform';
 import { TurboModuleAltcraftProfile } from './platform/turbo_module_altcraft_profile';
@@ -31,4 +30,4 @@ export class AltcraftProfile {
   }
 }
 
-export { toAltcraftException, Utilities };
+export { Utilities };

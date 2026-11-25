@@ -1,4 +1,3 @@
-import { AltcraftException, SDK_ERROR } from '@altcraft/core';
 import type { CategoryData, ResponseWithHttpCode } from '@altcraft/core';
 import { responseWithHttpCodeFromNative } from '@altcraft/core';
 import type { TokenData } from './models/token_data';
@@ -152,20 +151,6 @@ export class AltcraftPush {
   static openEvent(options: PushEventOptions = {}): void {
     AltcraftPush.platform.openEvent(options);
   }
-}
-
-/** Converts a native bridge error into an AltcraftException. */
-export function toAltcraftException(
-  e: unknown,
-  fallback: string
-): AltcraftException {
-  if (e instanceof AltcraftException) return e;
-  const code =
-    e != null && typeof e === 'object' && typeof (e as { code?: unknown }).code === 'string'
-      ? (e as { code: string }).code
-      : SDK_ERROR;
-  const message = e instanceof Error ? e.message : fallback;
-  return new AltcraftException(code, message);
 }
 
 export { responseWithHttpCodeFromNative, tokenDataFromNative };

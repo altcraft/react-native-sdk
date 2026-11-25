@@ -23,3 +23,17 @@ export const ALTCRAFT_INIT_ERROR = 'ALTCRAFT_INIT_ERROR';
 
 /** Generic native bridge error code. */
 export const SDK_ERROR = 'SDK_ERROR';
+
+/** Converts a native bridge error into an AltcraftException. */
+export function toAltcraftException(
+  e: unknown,
+  fallback: string
+): AltcraftException {
+  if (e instanceof AltcraftException) return e;
+  const code =
+    e != null && typeof e === 'object' && typeof (e as { code?: unknown }).code === 'string'
+      ? (e as { code: string }).code
+      : SDK_ERROR;
+  const message = e instanceof Error ? e.message : fallback;
+  return new AltcraftException(code, message);
+}

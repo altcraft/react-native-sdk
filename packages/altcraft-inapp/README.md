@@ -22,11 +22,14 @@ The In-App module is responsible for in-app campaigns.
 
 ## Dependencies
 
-Add the **In-App** package, Core, and Push to your React Native application:
+Add the **In-App** package and Core to your React Native application:
 
 ```sh
-npm install @altcraft/inapp @altcraft/core @altcraft/push
+npm install @altcraft/inapp @altcraft/core
 ```
+
+Push notifications are provided by the separate **Push** package and are
+only needed if your application uses push notifications.
 
 ---
 
