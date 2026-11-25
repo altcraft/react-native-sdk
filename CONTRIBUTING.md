@@ -6,20 +6,18 @@ We want this community to be friendly and respectful to each other. Please follo
 
 ## Development workflow
 
-This project is a monorepo managed using [Yarn workspaces](https://yarnpkg.com/features/workspaces). It contains the following packages:
+This project is a monorepo managed using [npm workspaces](https://docs.npmjs.com/cli/using-npm/workspaces). It contains the following packages:
 
-- The library package in the root directory.
+- The SDK packages in the `packages/` directory.
 - An example app in the `example/` directory.
 
 To get started with the project, make sure you have the correct version of [Node.js](https://nodejs.org/) installed. See the [`.nvmrc`](./.nvmrc) file for the version used in this project.
 
-Run `yarn` in the root directory to install the required dependencies for each package:
+Run `npm install` in the root directory to install the required dependencies for each package:
 
 ```sh
-yarn
+npm install
 ```
-
-> Since the project relies on Yarn workspaces, you cannot use [`npm`](https://github.com/npm/cli) for development without manually migrating.
 
 The [example app](/example/) demonstrates usage of the library. You need to run it to test any changes you make.
 
@@ -34,19 +32,19 @@ You can use various commands from the root directory to work with the project.
 To start the packager:
 
 ```sh
-yarn example start
+cd example && npm start
 ```
 
 To run the example app on Android:
 
 ```sh
-yarn example android
+cd example && npm run android
 ```
 
 To run the example app on iOS:
 
 ```sh
-yarn example ios
+cd example && npm run ios
 ```
 
 To confirm that the app is running with the new architecture, you can check the Metro logs for a message like this:
@@ -60,33 +58,44 @@ Note the `"fabric":true` and `"concurrentRoot":true` properties.
 Make sure your code passes TypeScript:
 
 ```sh
-yarn typecheck
+npm run typecheck
 ```
 
-To check for linting errors, run the following:
+## Building and packaging
+
+Each published package is compiled with [react-native-builder-bob](https://github.com/callstack/react-native-builder-bob). The generated `lib/` directories are not committed.
+
+Build all packages in dependency order (core, push, inapp, target, profile, umbrella):
 
 ```sh
-yarn lint
+npm run build
 ```
 
-To fix formatting errors, run the following:
+To inspect what would be published for a package:
 
 ```sh
-yarn lint --fix
+npm pack --workspace @altcraft/core --dry-run
 ```
 
+## Releasing
 
+The release script publishes packages in dependency order. It runs a dry run by default:
 
-### Scripts
+```sh
+npm run release
+```
 
-The `package.json` file contains various scripts for common tasks:
+To publish to npm (maintainers only):
 
-- `yarn`: setup project by installing dependencies.
-- `yarn typecheck`: type-check files with TypeScript.
-- `yarn lint`: lint files with [ESLint](https://eslint.org/).
-- `yarn example start`: start the Metro server for the example app.
-- `yarn example android`: run the example app on Android.
-- `yarn example ios`: run the example app on iOS.
+```sh
+npm run release:publish
+```
+
+The script builds all packages before publishing and stops on the first failure. Native SDK versions are pinned in the podspecs (`ios-sdk` `2.0.1`) and Gradle files (`android-sdk-*` `1.0.1`); changing them is a separate release decision.
+
+## Example app and umbrella autolinking
+
+The umbrella package `@altcraft/react-native-sdk` ships a `postinstall` step that adds the installed `@altcraft/*` modules to the consumer application's `react-native.config.js`. Set `ALTCRAFT_SKIP_AUTOLINK=1` to opt out. In this monorepo the step is skipped because the example app depends on the module packages directly.
 
 ### Sending a pull request
 
@@ -95,7 +104,7 @@ The `package.json` file contains various scripts for common tasks:
 When you're sending a pull request:
 
 - Prefer small pull requests focused on one change.
-- Verify that linters and tests are passing.
+- Verify that `npm run typecheck` and `npm run build` pass.
 - Review the documentation to make sure it looks good.
 - Follow the pull request template when opening a pull request.
 - For pull requests that change the API or implementation, discuss with maintainers first by opening an issue.

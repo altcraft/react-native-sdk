@@ -27,12 +27,14 @@ DerivedData
 *.xcuserstate
 project.xcworkspace
 **/.xcode.env.local
+*.xcworkspace/
 
 # iOS build artifacts
 ios/Pods/
 ios/build/
 example/ios/Pods/
 example/ios/build/
+example/ios/Podfile.lock
 
 # Android / IntelliJ
 .classpath
@@ -57,8 +59,9 @@ example/android/app/build/
 # CocoaPods
 Pods/
 
-# Ruby
+# Ruby / CocoaPods
 example/vendor/
+.bundle/
 
 # Node.js
 node_modules/
@@ -73,19 +76,25 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# Firebase provider configuration (contains project credentials)
+google-services.json
+GoogleService-Info.plist
+
 # BUCK
 buck-out/
 .buckd/
 android/app/libs/
 android/keystores/debug.keystore
 
-# Yarn
+# Package managers
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+.pnp.*
+*.tsbuildinfo
 
 # Turborepo
 .turbo/

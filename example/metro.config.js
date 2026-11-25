@@ -10,7 +10,13 @@ const root = path.resolve(__dirname, '..');
  *
  * @type {import('metro-config').MetroConfig}
  */
-module.exports = withMetroConfig(getDefaultConfig(__dirname), {
+const config = withMetroConfig(getDefaultConfig(__dirname), {
   root,
   dirname: __dirname,
 });
+
+// npm workspaces hoists everything into a single root node_modules,
+// so there are no duplicate copies to block.
+config.resolver.blockList = /^__never_matches__$/;
+
+module.exports = config;

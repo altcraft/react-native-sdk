@@ -1,6 +1,15 @@
-pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+pluginManagement { includeBuild("../../node_modules/@react-native/gradle-plugin") }
 plugins { id("com.facebook.react.settings") }
-extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
-rootProject.name = 'sdk.example'
+
+apply from: new File(settingsDir, 'react-node.gradle')
+
+def nodeBinary = gradle.ext.resolveNodeBinary(settingsDir)
+def reactNativeCli = new File(settingsDir, '../../node_modules/@react-native-community/cli/build/bin.js').canonicalPath
+
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex ->
+    ex.autolinkLibrariesFromCommand([nodeBinary, reactNativeCli, 'config'])
+}
+
+rootProject.name = 'com.altcraft.rn.app'
 include ':app'
-includeBuild('../node_modules/@react-native/gradle-plugin')
+includeBuild('../../node_modules/@react-native/gradle-plugin')

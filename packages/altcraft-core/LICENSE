@@ -1,0 +1,48 @@
+EULA
+
+END USER LICENSE AGREEMENT
+
+Copyright © 2026 Altcraft LLC. All rights reserved.
+
+1. LICENSE GRANT
+   This agreement grants you certain rights to use the Altcraft Mobile SDK (hereinafter referred to as the "Software").
+   All rights not expressly granted by this agreement remain with the copyright holder.
+
+2. USE
+   You are permitted to use and distribute the Software for both commercial and non-commercial purposes.
+
+3. MODIFICATION WITHOUT PUBLICATION
+   You may modify the Software for your own internal purposes without any obligation to publish such modifications.
+
+4. MODIFICATION WITH PUBLICATION
+   Publication of modified Software requires prior written permission from the copyright holder.
+
+5. DISCLAIMER OF WARRANTIES
+   The Software is provided "as is," without any warranties, express or implied, including but not limited to
+   warranties of merchantability, fitness for a particular purpose, and non-infringement of third-party rights.
+
+6. LIMITATION OF LIABILITY
+   Under no circumstances shall the copyright holder be liable for any direct, indirect, incidental, special,
+   punitive, or consequential damages (including but not limited to: procurement of substitute goods or services;
+   loss of data, profits, or business interruption) arising in any way from the use of this Software,
+   even if the copyright holder has been advised of the possibility of such damages.
+
+7. DISTRIBUTION
+   When distributing the Software, you must provide all recipients with a copy of this license agreement.
+
+8. COPYRIGHT AND THIRD-PARTY COMPONENTS
+   This Software may include components distributed under other licenses. The full list of such components
+   and their respective licenses is provided below:
+
+### Third-party libraries and licenses
+
+  **Apache License 2.0**
+Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+* [React Native](https://github.com/facebook/react-native)
+* [TypeScript](https://www.typescriptlang.org/)
+
+**MIT License**
+
+* [React](https://github.com/facebook/react)

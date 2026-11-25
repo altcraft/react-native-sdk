@@ -1,0 +1,68 @@
+gradle.ext.resolveNodeBinary = { File rootDir ->
+    if (gradle.ext.has('resolvedNodeBinaryPath')) {
+        return gradle.ext.resolvedNodeBinaryPath
+    }
+
+    def localProperties = new Properties()
+    def localPropertiesFile = new File(rootDir, 'local.properties')
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.withInputStream { localProperties.load(it) }
+    }
+
+    def configured = localProperties.getProperty('node.binary')
+    if (configured) {
+        gradle.ext.resolvedNodeBinaryPath = configured
+        return gradle.ext.resolvedNodeBinaryPath
+    }
+
+    def fromEnv = System.getenv('NODE_BINARY')
+    if (fromEnv) {
+        gradle.ext.resolvedNodeBinaryPath = fromEnv
+        return gradle.ext.resolvedNodeBinaryPath
+    }
+
+    def home = System.getProperty('user.home')
+    def candidates = []
+
+    def nvmDir = new File(home, '.nvm/versions/node')
+    if (nvmDir.isDirectory()) {
+        def versions = nvmDir.listFiles()?.findAll { new File(it, 'bin/node').canExecute() }
+        versions?.sort { a, b ->
+            def pa = (a.name =~ /(\d+)\.(\d+)\.(\d+)/)
+            def pb = (b.name =~ /(\d+)\.(\d+)\.(\d+)/)
+            if (pa.find() && pb.find()) {
+                for (int i = 1; i <= 3; i++) {
+                    def cmp = pa.group(i).toInteger() <=> pb.group(i).toInteger()
+                    if (cmp != 0) {
+                        return cmp
+                    }
+                }
+                return 0
+            }
+            return a.name <=> b.name
+        }
+        versions?.reverse()
+        def defaultAlias = new File(home, '.nvm/alias/default')
+        if (defaultAlias.isFile()) {
+            def alias = defaultAlias.text.trim()
+            def preferred = versions?.find {
+                it.name == alias || it.name == "v${alias}" || it.name.startsWith("v${alias}.")
+            }
+            if (preferred != null) {
+                versions.remove(preferred)
+                versions.add(0, preferred)
+            }
+        }
+        versions?.each { candidates << new File(it, 'bin/node').absolutePath }
+    }
+
+    candidates << '/opt/homebrew/bin/node'
+    candidates << '/usr/local/bin/node'
+    candidates << '/usr/bin/node'
+    candidates << new File(home, '.volta/bin/node').absolutePath
+    candidates << new File(home, '.local/share/fnm/aliases/default/bin/node').absolutePath
+
+    def found = candidates.find { new File(it).canExecute() }
+    gradle.ext.resolvedNodeBinaryPath = found ?: 'node'
+    return gradle.ext.resolvedNodeBinaryPath
+}

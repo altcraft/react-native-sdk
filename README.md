@@ -2,35 +2,90 @@
 
 ![Altcraft SDK Logo](https://guides.altcraft.com/img/logo.svg)
 
-[![npm version](https://img.shields.io/npm/v/react-native-sdk?style=flat-square)](https://www.npmjs.com/package/react-native-sdk)
-[![React Native](https://img.shields.io/badge/React_Native-0.70%2B-blue?style=flat-square)](https://reactnative.dev/)
-[![Platforms](https://img.shields.io/badge/Platforms-Android_%7C_iOS-green?style=flat-square)](#)
-[![Push Providers](https://img.shields.io/badge/Push-FCM_%7C_APNs-orange?style=flat-square)](#)
+[![React Native](https://img.shields.io/badge/React_Native-0.75%2B-blue?style=flat-square)](https://reactnative.dev/)
+[![Platforms](https://img.shields.io/badge/Platforms-Android_iOS-green?style=flat-square)](#)
+[![npm](https://img.shields.io/npm/v/@altcraft/react-native-sdk.svg?style=flat-square)](https://www.npmjs.com/package/@altcraft/react-native-sdk)
 
-Altcraft React Native SDK is a bridge to the native **Altcraft Mobile SDK** for Android and iOS. The SDK automates push notification delivery, event submission, request retries, and supports flexible workflows with JWT or role-based tokens.
+Altcraft React Native SDK is a library for interacting with the **Altcraft Marketing Platform**. It uses a modular architecture in which each component provides a specific set of capabilities.
 
 ---
 
-## Features
+## SDK Modules
 
-* [x] Compatible with TypeScript and JavaScript.
+### Core
+
+The Core module is the foundation of the SDK: it connects your application to the Altcraft platform and makes the optional modules available.
+
+* [x] SDK initialization and configuration.
+* [x] Authentication with JWT or a role token (*RToken*).
 * [x] Works with anonymous and registered users; supports multiple profiles on one device (JWT).
-* [x] Push subscription management: push subscribe, push suspend, push unsubscribe.
-* [x] Automatic push token update when it changes.
-* [x] Automatic transmission of notification delivery and open events.
-* [x] Mobile events registration.
-* [x] Update profile fields.
-* [x] Automatic retry of failed requests.
-* [x] Support for push providers: Firebase FCM (Android), APNs (iOS).
-* [x] Secure requests using JWT and flexible identifier matching.
-* [x] Support for rToken for simple subscription scenarios.
+* [x] Transmission of requests to the platform with automatic retry of failed requests.
+* [x] SDK event stream for monitoring SDK behavior in the app.
+* [x] Native event message catalog per module (`moduleEvents`).
 * [x] SDK data cleanup and background tasks termination.
 
+### Push
+
+The Push module is responsible for push notifications.
+
+* [x] Push subscription management: subscribe, suspend, unsubscribe.
+* [x] Automatic display of push notifications configured in the platform.
+* [x] Push token management: automatic update when the token changes, manual token operations.
+* [x] Automatic transmission of notification delivery and open events.
+* [x] Support for push providers: APNs, Firebase, Huawei, RuStore (platform-dependent).
+* [x] Custom push notification handling and access to all message data fields.
+* [x] Notification permission request for Android 13+ devices.
+* [x] Native event message catalog (`moduleEvents`).
+
+### Target
+
+The Target module is responsible for mobile events: it sends target events to the platform to record goal achievements.
+
+* [x] Sending target events (goal conversions) from the app.
+* [x] Attaching event payloads, matching parameters, profile fields, and channel subscriptions to a target event.
+* [x] Attaching UTM tags to target events for attribution.
+* [x] `sendTarget` entry point matching the native SDKs.
+* [x] Native event message catalog (`moduleEvents`).
+
+### Profile
+
+The Profile module is responsible for user profile fields.
+
+* [x] Updating profile fields from the app.
+* [x] Native event message catalog (`moduleEvents`).
+
+### In-App
+
+The In-App module is responsible for in-app campaigns.
+
+* [x] Automatic display of in-app campaigns configured in the platform.
+* [x] In-App subscription management: subscribe and unsubscribe.
+* [x] Placement requests, current screen matching, and custom triggers.
+* [x] In-app view animation customization (fade, offset, scale per campaign).
+* [x] Native event message catalog (`moduleEvents`).
+
 ---
 
-## Dependency
+## Dependencies
 
-`react-native-sdk:0.0.5`
+Altcraft React Native SDK packages are published on npm. The SDK is modular; the umbrella package provides the full `AltcraftSDK` API over the module packages.
+
+| Package | Description |
+|---|---|
+| [@altcraft/react-native-sdk](packages/altcraft) | Umbrella package with the full SDK API |
+| [@altcraft/core](packages/altcraft-core) | Core: initialization, events, authentication |
+| [@altcraft/push](packages/altcraft-push) | Push subscriptions, tokens, providers |
+| [@altcraft/inapp](packages/altcraft-inapp) | In-App campaigns, placements, screens, triggers |
+| [@altcraft/target](packages/altcraft-target) | Target events and UTM |
+| [@altcraft/profile](packages/altcraft-profile) | Profile fields |
+
+Install the full SDK:
+
+```sh
+npm install @altcraft/react-native-sdk
+```
+
+To use only a subset of the modules, install the required packages. The `@altcraft/core` package must be listed as a direct dependency because the other modules build on it.
 
 ---
 
@@ -38,7 +93,7 @@ Altcraft React Native SDK is a bridge to the native **Altcraft Mobile SDK** for 
 
 ### JWT-Authorization (recommended approach)
 
-JWT is added to the header of every request. The SDK requests the current token from the app via the `JWTInterface`.
+JWT is added to the header of every request. The SDK requests the current token from the app through the JWT provider registered in the SDK.
 
 **Advantages:**
 
@@ -63,26 +118,18 @@ Profile lookup is limited to the push token identifier.
 
 ## Requirements
 
-* React Native 0.70+.
+* React Native 0.75+.
 * Android 7.1+ (API 25).
 * iOS 13.0+.
-* Push provider integrated in the host app (FCM for Android, APNs for iOS).
+* A configured push provider (Firebase, Huawei, RuStore on Android; APNs on iOS) when using the Push module.
 
 ---
 
-## Documentations
+## Documentation
 
-Detailed information on SDK setup, functionality, and usage is available on the Altcraft documentation portal. You can navigate to the required section using the links below:
+Detailed information on SDK setup, functionality, and usage is available on the Altcraft documentation portal:
 
-- [**Quick Start**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/quick-start)
-- [**SDK Functionality**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/functionality)
-- [**SDK Configuration**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/setup)
-- [**Classes and Structures**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/api)
-
-**Provider Setup**
-
-- [FCM](https://guides.altcraft.com/en/developer-guide/sdk/mobile/android/providers/fcm/)
-- [APNs](https://guides.altcraft.com/en/developer-guide/sdk/mobile/ios/providers/apns/)
+- [**Altcraft React Native SDK**](https://guides.altcraft.com/en/developer-guide/sdk/mobile/react-native/)
 
 ---
 
@@ -90,49 +137,6 @@ Detailed information on SDK setup, functionality, and usage is available on the 
 
 ### EULA
 
-END USER LICENSE AGREEMENT
+The SDK is distributed under the Altcraft End User License Agreement. See [LICENSE](LICENSE) for the full text.
 
-Copyright © 2024 Altcraft LLC. All rights reserved.
-
-1. LICENSE GRANT
-   This agreement grants you certain rights to use the Altcraft Mobile SDK (hereinafter referred to as the "Software").
-   All rights not expressly granted by this agreement remain with the copyright holder.
-
-2. USE
-   You are permitted to use and distribute the Software for both commercial and non-commercial purposes.
-
-3. MODIFICATION WITHOUT PUBLICATION
-   You may modify the Software for your own internal purposes without any obligation to publish such modifications.
-
-4. MODIFICATION WITH PUBLICATION
-   Publication of modified Software requires prior written permission from the copyright holder.
-
-5. DISCLAIMER OF WARRANTIES
-   The Software is provided "as is," without any warranties, express or implied, including but not limited to
-   warranties of merchantability, fitness for a particular purpose, and non-infringement of third-party rights.
-
-6. LIMITATION OF LIABILITY
-   Under no circumstances shall the copyright holder be liable for any direct, indirect, incidental, special,
-   punitive, or consequential damages (including but not limited to: procurement of substitute goods or services;
-   loss of data, profits, or business interruption) arising in any way from the use of this Software,
-   even if the copyright holder has been advised of the possibility of such damages.
-
-7. DISTRIBUTION
-   When distributing the Software, you must provide all recipients with a copy of this license agreement.
-
-8. COPYRIGHT AND THIRD-PARTY COMPONENTS
-   This Software may include components distributed under other licenses. The full list of such components
-   and their respective licenses is provided below:
-
-### Third-party libraries and licenses
-
-  **Apache License 2.0**
-Licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-* [React Native](https://github.com/facebook/react-native)
-* [TypeScript](https://www.typescriptlang.org/)
-
-**MIT License**
-
-* [React](https://github.com/facebook/react)
+Copyright © 2026 Altcraft LLC. All rights reserved.

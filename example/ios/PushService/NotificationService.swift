@@ -1,29 +1,48 @@
+//
 //  NotificationService.swift
-//  PushService
+//  Altcraft
 //
 //  Created by Andrey Pogodin.
 //
-//  Copyright © 2025 Altcraft. All rights reserved.
+//  Copyright © 2026 Altcraft. All rights reserved.
 
-import Altcraft
+@_spi(_Altcraft) import AltcraftCore
 import UserNotifications
+import AltcraftCore
+import AltcraftPush
 
+/// Notification Service Extension for rich push processing.
 class NotificationService: UNNotificationServiceExtension {
-    let appGroupID =  "group.altcraft.react.native.example"
-    
-    let jwtProvider = JWTProvider()
-    
-    override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-        AltcraftNSE.shared.setAppGroup(groupName: appGroupID)
-        AltcraftNSE.shared.setJWTProvider(provider: jwtProvider)
-        
-        if AltcraftNSE.shared.isAltcraftPush(request) {
-            AltcraftNSE.shared.handleNotificationRequest(request: request, contentHandler: contentHandler)
-        } else {
-            contentHandler(request.content)
-        }
+
+  /// - important! Set app groups identifier.
+  let appGroupID = "group.altcraft.react.native.example"
+
+  /// - important! Set the provider to JWT if you are using JWT authentication.
+  let jwtProvider = JWTProvider()
+
+  /// Processes the incoming push: downloads rich media, applies action
+  /// buttons and delivers the modified content.
+  override func didReceive(
+    _ request: UNNotificationRequest,
+    withContentHandler contentHandler: @escaping (
+      UNNotificationContent
+    ) -> Void
+  ) {
+    AltcraftNSE.setAppGroup(groupName: appGroupID)
+    AltcraftNSE.setJWTProvider(provider: jwtProvider)
+
+    if AltcraftNSE.isAltcraftPush(request) {
+      AltcraftNSE.handleNotificationRequest(
+        request: request,
+        contentHandler: contentHandler
+      )
+    } else {
+      contentHandler(request.content)
     }
-    override func serviceExtensionTimeWillExpire() {
-        AltcraftNSE.shared.serviceExtensionTimeWillExpire()
-    }
+  }
+  /// Delivers the best-available content when the extension runtime
+  /// is about to expire.
+  override func serviceExtensionTimeWillExpire() {
+    AltcraftNSE.serviceExtensionTimeWillExpire()
+  }
 }

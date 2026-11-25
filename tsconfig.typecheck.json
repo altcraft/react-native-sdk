@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "paths": {
+      "@altcraft/core": ["packages/altcraft-core/src/index.ts"],
+      "@altcraft/push": ["packages/altcraft-push/src/index.ts"],
+      "@altcraft/inapp": ["packages/altcraft-inapp/src/index.ts"],
+      "@altcraft/target": ["packages/altcraft-target/src/index.ts"],
+      "@altcraft/profile": ["packages/altcraft-profile/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src"],
+  "exclude": ["**/lib", "**/android", "**/ios", "example"]
+}

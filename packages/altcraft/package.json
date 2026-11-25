@@ -1,0 +1,82 @@
+{
+  "name": "@altcraft/react-native-sdk",
+  "version": "1.0.0",
+  "description": "Altcraft React Native SDK (umbrella package with the full SDK API)",
+  "author": "Altcraft (https://altcraft.com)",
+  "homepage": "https://github.com/altcraft/react-native-sdk",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/altcraft/react-native-sdk.git",
+    "directory": "packages/altcraft"
+  },
+  "source": "./src/index.ts",
+  "main": "./lib/commonjs/index.js",
+  "module": "./lib/module/index.js",
+  "react-native": "./src/index.ts",
+  "types": "./lib/typescript/commonjs/src/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": {
+        "types": "./lib/typescript/module/src/index.d.ts",
+        "default": "./lib/module/index.js"
+      },
+      "require": {
+        "types": "./lib/typescript/commonjs/src/index.d.ts",
+        "default": "./lib/commonjs/index.js"
+      },
+      "default": "./lib/module/index.js"
+    },
+    "./autolink": "./autolink.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "LICENSE",
+    "README.md",
+    "autolink.js",
+    "scripts"
+  ],
+  "scripts": {
+    "build": "bob build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "prepack": "npm run build",
+    "postinstall": "node ./scripts/postinstall.cjs"
+  },
+  "dependencies": {
+    "@altcraft/core": "^1.0.0",
+    "@altcraft/push": "^1.0.0",
+    "@altcraft/inapp": "^1.0.0",
+    "@altcraft/target": "^1.0.0",
+    "@altcraft/profile": "^1.0.0"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": ">=0.75"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      [
+        "module",
+        {
+          "esm": true
+        }
+      ],
+      [
+        "commonjs",
+        {
+          "esm": true
+        }
+      ],
+      "typescript"
+    ]
+  }
+}

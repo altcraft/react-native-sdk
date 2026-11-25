@@ -5,8 +5,9 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 
-import Altcraft
-import Sdk
+import AltcraftCore
+import AltcraftInApp
+import AltcraftPush
 
 private let APP_GROUP_SUITE = "group.altcraft.react.native.example"
 
@@ -20,24 +21,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
   var reactNativeDelegate: ReactNativeDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
 
-  private let apnsProvider = APNSProvider()
-
   func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
     // MARK: - Altcraft setting
 
-    let altcraftSDK = AltcraftSDK.shared
-    altcraftSDK.setAppGroup(groupName: APP_GROUP_SUITE)
-    altcraftSDK.backgroundTasks.registerBackgroundTask()
-    altcraftSDK.setJWTProvider(provider: jwtProvider)
-    altcraftSDK.pushTokenFunctions.setAPNSTokenProvider(
-        apnsProvider
-      )
-    altcraftSDK.notificationManager.registerForPushNotifications(
+    AltcraftSDK.setAppGroup(groupName: APP_GROUP_SUITE)
+    AltcraftSDK.backgroundTasks.registerBackgroundTask()
+    AltcraftSDK.auth.setJWTProvider(provider: jwtProvider)
+    AltcraftSDK.push.token.setAPNSTokenProvider(apnsProvider)
+    AltcraftSDK.push.notificationManager.registerForPushNotifications(
       for: application
     )
+    // Registers lifecycle tracking used by In-App campaigns: fires the
+    // default `open_app` trigger once the app becomes active.
+    AltcraftSDK.inApp.registerLifecycleTracking()
 
     // MARK: -
 
@@ -60,6 +59,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
   ) {
     setAPNsTokenInUserDefault(deviceToken)
+    AltcraftSDK.push.token.getToken()
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .list, .sound, .badge])
+    } else {
+      completionHandler([.alert, .sound, .badge])
+    }
   }
 }
 

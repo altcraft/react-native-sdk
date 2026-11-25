@@ -1,12 +1,23 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-// Firebase config files are intentionally not included in the public example.
-// Add example/android/app/google-services.json before enabling this plugin.
-// apply plugin: "com.google.gms.google-services"
+
+// Firebase credentials are not committed. Apply the Google Services plugin
+// only when a local google-services.json is present, so the example builds
+// without a Firebase project.
+if (file('google-services.json').exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
+
+apply from: new File(rootProject.projectDir, 'react-node.gradle')
 
 react {
     autolinkLibrariesWithApp()
+    cliFile = file("../../../node_modules/react-native/cli.js")
+    codegenDir = file("../../../node_modules/@react-native/codegen")
+    reactNativeDir = file("../../../node_modules/react-native")
+    hermesCommand = file("../../../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc").absolutePath
+    nodeExecutableAndArgs.set([gradle.ext.resolveNodeBinary(rootProject.projectDir)])
 }
 
 def enableProguardInReleaseBuilds = false
@@ -17,10 +28,10 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "sdk.example"
+    namespace "com.altcraft.rn.app"
 
     defaultConfig {
-        applicationId "sdk.example"
+        applicationId "com.altcraft.rn.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

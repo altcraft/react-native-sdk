@@ -38,6 +38,4 @@ end
 
 target 'PushService' do
   inherit! :search_paths
-
-  pod 'Altcraft', '1.0.3'
 end
